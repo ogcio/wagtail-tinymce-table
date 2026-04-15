@@ -27,8 +27,12 @@ dev = [
 [project.urls]
 Repository = "https://github.com/your-org/wagtail-tinymce"
 
-[tool.setuptools.packages.find]
-include = ["wagtailtinymce*"]
+[tool.setuptools]
+packages = ["wagtailtinymce", "wagtailtinymce.core"]
+
+[tool.setuptools.package-dir]
+"wagtailtinymce" = "."
+"wagtailtinymce.core" = "core"
 
 [tool.setuptools.package-data]
 "wagtailtinymce" = ["static/**/*"]
