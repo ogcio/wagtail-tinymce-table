@@ -34,11 +34,41 @@ A set of [Wagtail](https://wagtail.org/) StreamField blocks that embed a [TinyMC
 
 ## Installation
 
+### From PyPI
+
 ```bash
 pip install wagtail-tinymce
 # with localisation support:
 pip install "wagtail-tinymce[localize]"
 ```
+
+### From Git (clone URL and `master` branch)
+
+You can install the package straight from the repository without publishing to PyPI. Point pip at the HTTPS git address and pin the `master` branch with `@master`:
+
+```bash
+pip install git+https://github.com/ogcio/wagtail-tinymce-table.git@master
+```
+
+With the optional `wagtail-localize` extra:
+
+```bash
+pip install "wagtail-tinymce[localize] @ git+https://github.com/ogcio/wagtail-tinymce-table.git@master"
+```
+
+In a `requirements.txt` file (PEP 508):
+
+```text
+wagtail-tinymce @ git+https://github.com/ogcio/wagtail-tinymce-table.git@master
+```
+
+With localisation:
+
+```text
+wagtail-tinymce[localize] @ git+https://github.com/ogcio/wagtail-tinymce-table.git@master
+```
+
+---
 
 Add `"wagtailtinymce"` and `"tinymce"` to `INSTALLED_APPS`:
 
