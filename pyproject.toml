@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wagtail-tinymce"
-version = "0.1.0"
+version = "0.2.0"
 description = "TinyMCE-powered StreamField blocks for Wagtail, including a table block with Excel paste support."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.9"
 dependencies = [
     "wagtail>=4.0",
-    "django-tinymce>=3.5",
+    "django-tinymce>=5.0",
     "bleach>=6.0",
     "beautifulsoup4>=4.12",
     "lxml>=4.9",

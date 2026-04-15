@@ -79,6 +79,7 @@ class TinyMCETableBlock(TinyMCEBlock):
         "table_cell_advtab": False,
         "table_row_advtab": False,
         "language": "en",
+        "license_key": "gpl",
         "setup": _TFOOT_SETUP,
     }
 
