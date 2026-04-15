@@ -102,7 +102,133 @@ python manage.py collectstatic
 
 ## Quick start
 
-### Table block
+### Complete working example
+
+The snippets below show every file you need to add or edit in a standard Wagtail project to get a table block working end-to-end.
+
+#### 1. `settings.py`
+
+```python
+INSTALLED_APPS = [
+    # --- Wagtail core ---
+    "wagtail.contrib.forms",
+    "wagtail.contrib.redirects",
+    "wagtail.embeds",
+    "wagtail.sites",
+    "wagtail.users",
+    "wagtail.snippets",
+    "wagtail.documents",
+    "wagtail.images",
+    "wagtail.search",
+    "wagtail.admin",
+    "wagtail",
+    # --- Django ---
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    # --- Third-party ---
+    "tinymce",          # django-tinymce must come before wagtailtinymce
+    "wagtailtinymce",   # this package
+]
+
+# Required by django-tinymce (may be an empty dict if you rely on block-level config)
+TINYMCE_DEFAULT_CONFIG = {}
+```
+
+#### 2. `myapp/models.py`
+
+```python
+from wagtail.models import Page
+from wagtail.fields import StreamField
+from wagtail.admin.panels import FieldPanel
+
+from wagtailtinymce.core.table_block import TinyMCETableBlock
+
+
+class TableDemoPage(Page):
+    """A page that contains one or more TinyMCE table blocks."""
+
+    body = StreamField(
+        [
+            ("table", TinyMCETableBlock()),
+        ],
+        blank=True,
+        use_json_field=True,
+        verbose_name="Page body",
+    )
+
+    content_panels = Page.content_panels + [
+        FieldPanel("body"),
+    ]
+
+    class Meta:
+        verbose_name = "Table demo page"
+```
+
+#### 3. `myapp/templates/myapp/table_demo_page.html`
+
+```html
+{% extends "base.html" %}
+{% load wagtailcore_tags %}
+
+{% block content %}
+  <article>
+    <h1>{{ page.title }}</h1>
+
+    {% for block in page.body %}
+      {% if block.block_type == "table" %}
+        {# The block value is already sanitised HTML — render it directly #}
+        <div class="table-wrapper">
+          {{ block.value }}
+        </div>
+      {% endif %}
+    {% endfor %}
+  </article>
+{% endblock %}
+```
+
+> **Tip:** use `{% include_block page.body %}` instead of the manual loop if you do not need to wrap individual blocks in extra markup.
+
+#### 4. Optional: add basic table styles
+
+The block stores a plain `<table>` element. Add CSS so it displays nicely:
+
+```css
+/* static/css/content.css  (load this in your base template) */
+.table-wrapper {
+    overflow-x: auto;          /* horizontal scroll on small screens */
+}
+
+.table-wrapper table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+.table-wrapper th,
+.table-wrapper td {
+    border: 1px solid #d1d5db;
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    vertical-align: top;
+}
+
+.table-wrapper thead th {
+    background-color: #f3f4f6;
+    font-weight: 600;
+}
+
+.table-wrapper tfoot td {
+    background-color: #f9fafb;
+    font-style: italic;
+}
+```
+
+---
+
+### Table block (minimal)
 
 ```python
 from wagtail.models import Page
