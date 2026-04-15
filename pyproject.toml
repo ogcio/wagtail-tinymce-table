@@ -35,3 +35,15 @@ include = ["wagtailtinymce*"]
 
 [tool.setuptools.package-data]
 "wagtailtinymce" = ["static/**/*"]
+
+[tool.pytest.ini_options]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+testpaths = ["tests"]
+# pytest-django requires DJANGO_SETTINGS_MODULE or inline config;
+# Django is configured programmatically in tests/conftest.py instead.
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
