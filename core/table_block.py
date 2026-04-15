@@ -1,9 +1,4 @@
-try:
-    from wagtail_localize.segments import StringSegmentValue
-
-    HAS_LOCALIZE = True
-except ImportError:
-    HAS_LOCALIZE = False
+from wagtail_localize.segments import StringSegmentValue
 
 from bs4 import BeautifulSoup, NavigableString
 
@@ -131,9 +126,6 @@ class TinyMCETableBlock(TinyMCEBlock):
     allowed_styles = ["width", "border-collapse"]
 
     def get_translatable_segments(self, data, **kwargs):
-        if not HAS_LOCALIZE:
-            return []
-
         duplicate_elements = []
         segments = []
         soup = BeautifulSoup(data, features="lxml")
@@ -167,9 +159,6 @@ class TinyMCETableBlock(TinyMCEBlock):
         return [seg_dict[elem] for elem in first_list]
 
     def restore_translated_segments(self, block_value, segments):
-        if not HAS_LOCALIZE:
-            return block_value
-
         duplicate_elements = {}
         soup = BeautifulSoup(block_value, "html.parser")
         tables = soup.find_all("table")

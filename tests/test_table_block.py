@@ -32,20 +32,19 @@ class MockSegment:
 
 
 @pytest.fixture
-def block():
-    return TinyMCETableBlock()
-
-
-@pytest.fixture
-def localize_block(block, monkeypatch):
-    """A TinyMCETableBlock with wagtail-localize patched in (always)."""
-    monkeypatch.setattr("wagtailtinymce.core.table_block.HAS_LOCALIZE", True)
+def block(monkeypatch):
+    """A TinyMCETableBlock with StringSegmentValue replaced by MockSegment
+    so tests do not depend on the real wagtail-localize internals."""
     monkeypatch.setattr(
         "wagtailtinymce.core.table_block.StringSegmentValue",
         MockSegment,
-        raising=False,
     )
-    return block
+    return TinyMCETableBlock()
+
+
+# Alias so existing test methods that used ``localize_block`` continue to work
+# without any other changes.
+localize_block = block
 
 
 # ---------------------------------------------------------------------------
@@ -253,11 +252,6 @@ class TestGetTranslatableSegments:
         assert by_text["Alpha"] == 0
         assert by_text["Gamma"] == 2
 
-    def test_returns_empty_list_when_no_localize(self, block, monkeypatch):
-        monkeypatch.setattr("wagtailtinymce.core.table_block.HAS_LOCALIZE", False)
-        html = "<table><tbody><tr><td>Text</td></tr></tbody></table>"
-        assert block.get_translatable_segments(html) == []
-
     def test_whitespace_only_cell_skipped(self, localize_block):
         html = "<table><tbody><tr><td>   </td><td>Real</td></tr></tbody></table>"
         segs = localize_block.get_translatable_segments(html)
@@ -382,12 +376,6 @@ class TestRestoreTranslatedSegments:
         texts = [td.get_text() for td in inner_tds]
         assert "Anidado" in texts
         assert "Exterior" in texts
-
-    def test_returns_unchanged_when_no_localize(self, block, monkeypatch):
-        monkeypatch.setattr("wagtailtinymce.core.table_block.HAS_LOCALIZE", False)
-        html = "<table><tbody><tr><td>Text</td></tr></tbody></table>"
-        result = block.restore_translated_segments(html, [])
-        assert result == html
 
     def test_round_trip_extract_then_restore(self, localize_block):
         """Segments extracted from a table can be restored to produce the

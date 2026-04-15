@@ -15,16 +15,13 @@ dependencies = [
     "bleach>=6.0",
     "beautifulsoup4>=4.12",
     "lxml>=4.9",
+    "wagtail-localize>=1.5",
 ]
 
 [project.optional-dependencies]
-localize = [
-    "wagtail-localize>=1.5",
-]
 dev = [
     "pytest",
     "pytest-django",
-    "wagtail-localize>=1.5",
 ]
 
 [project.urls]

@@ -28,44 +28,30 @@ A set of [Wagtail](https://wagtail.org/) StreamField blocks that embed a [TinyMC
 | beautifulsoup4 | 4.12 |
 | lxml | 4.9 |
 
-`wagtail-localize` ≥ 1.5 is an **optional** dependency. Install it only if you use Wagtail's localisation features.
+`wagtail-localize` ≥ 1.5 is a **required** dependency and is installed automatically.
 
 ---
 
 ## Installation
 
+`wagtail-localize` is a **required** dependency — it is always installed automatically. No extra flags are needed.
+
 ### From PyPI
 
 ```bash
 pip install wagtail-tinymce
-# with localisation support:
-pip install "wagtail-tinymce[localize]"
 ```
 
-### From Git (clone URL and `master` branch)
-
-You can install the package straight from the repository without publishing to PyPI. Point pip at the HTTPS git address and pin the `master` branch with `@master`:
+### From Git (`master` branch)
 
 ```bash
 pip install git+https://github.com/ogcio/wagtail-tinymce-table.git@master
-```
-
-With the optional `wagtail-localize` extra:
-
-```bash
-pip install "wagtail-tinymce[localize] @ git+https://github.com/ogcio/wagtail-tinymce-table.git@master"
 ```
 
 In a `requirements.txt` file (PEP 508):
 
 ```text
 wagtail-tinymce @ git+https://github.com/ogcio/wagtail-tinymce-table.git@master
-```
-
-With localisation:
-
-```text
-wagtail-tinymce[localize] @ git+https://github.com/ogcio/wagtail-tinymce-table.git@master
 ```
 
 ---
@@ -337,11 +323,7 @@ When `wagtail-localize` is installed, `TinyMCETableBlock` implements the segment
 - Cells that contain a nested table are skipped entirely.
 - Merged cells (`colspan`/`rowspan`) are treated as a single cell.
 
-No configuration is needed. Install the optional extra and Wagtail Localize will pick up the segments automatically:
-
-```bash
-pip install "wagtail-tinymce[localize]"
-```
+No configuration is needed. `wagtail-localize` is installed automatically with the package, and Wagtail Localize will pick up the segments automatically.
 
 ---
 
@@ -365,7 +347,7 @@ wagtailtinymce/
 ## Running the tests
 
 ```bash
-pip install "wagtail-tinymce[dev]"
+pip install "wagtail-tinymce[dev]"   # adds pytest + pytest-django
 pytest
 ```
 
