@@ -133,6 +133,16 @@ class TinyMCETableBlock(TinyMCEBlock):
         tables = soup.find_all("table")
         col = 0
         for table in tables:
+            # <caption> is a direct child of <table>, not inside any <tr>, so it
+            # must be handled explicitly before the row loop.
+            caption = table.find("caption")
+            if caption is not None:
+                text = caption.get_text(separator=" ").strip()
+                if text and text not in duplicate_elements:
+                    segments.append(StringSegmentValue("", text, order=col))
+                    duplicate_elements.append(text)
+                col += 1
+
             rows = table.find_all("tr")
             for row in rows:
                 # Include both <td> (body/footer cells) and <th> (header cells).
@@ -168,6 +178,22 @@ class TinyMCETableBlock(TinyMCEBlock):
 
         if tables:
             for table in tables:
+                # Restore caption before processing rows, mirroring extraction order.
+                caption = table.find("caption")
+                if caption is not None:
+                    text = caption.get_text(separator=" ").strip()
+                    if text:
+                        try:
+                            translated = sorted_segment[cell].string.data
+                            if text not in duplicate_elements and text not in duplicate_elements.values():
+                                duplicate_elements[text] = translated
+                                _replace_cell_text(caption, translated)
+                                cell += 1
+                            elif text not in duplicate_elements.values():
+                                _replace_cell_text(caption, duplicate_elements[text])
+                        except Exception as e:
+                            print(e)
+
                 rows = table.find_all("tr")
                 for row in rows:
                     # Mirror the same cell selector used in get_translatable_segments.

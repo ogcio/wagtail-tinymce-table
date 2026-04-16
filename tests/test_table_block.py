@@ -259,6 +259,41 @@ class TestGetTranslatableSegments:
         assert len(segs) == 1
         assert "Real" in texts
 
+    def test_caption_extracted(self, localize_block):
+        html = (
+            "<table>"
+            "<caption>Annual Report</caption>"
+            "<tbody><tr><td>Data</td></tr></tbody>"
+            "</table>"
+        )
+        segs = localize_block.get_translatable_segments(html)
+        texts = [s.string.data for s in segs]
+        assert "Annual Report" in texts
+
+    def test_caption_order_before_cells(self, localize_block):
+        """Caption must receive a lower order value than the first cell."""
+        html = (
+            "<table>"
+            "<caption>My Caption</caption>"
+            "<tbody><tr><td>Cell</td></tr></tbody>"
+            "</table>"
+        )
+        segs = localize_block.get_translatable_segments(html)
+        by_text = {s.string.data: s.order for s in segs}
+        assert by_text["My Caption"] < by_text["Cell"]
+
+    def test_empty_caption_not_extracted(self, localize_block):
+        html = (
+            "<table>"
+            "<caption></caption>"
+            "<tbody><tr><td>Data</td></tr></tbody>"
+            "</table>"
+        )
+        segs = localize_block.get_translatable_segments(html)
+        texts = [s.string.data for s in segs]
+        assert "" not in texts
+        assert len(segs) == 1
+
 
 # ---------------------------------------------------------------------------
 # restore_translated_segments()
@@ -376,6 +411,34 @@ class TestRestoreTranslatedSegments:
         texts = [td.get_text() for td in inner_tds]
         assert "Anidado" in texts
         assert "Exterior" in texts
+
+    def test_caption_translated(self, localize_block):
+        html = (
+            "<table>"
+            "<caption>Annual Report</caption>"
+            "<tbody><tr><td>Revenue</td></tr></tbody>"
+            "</table>"
+        )
+        segs = self._segs(("Informe Anual", 0), ("Ingresos", 1))
+        result = localize_block.restore_translated_segments(html, segs)
+        soup = BeautifulSoup(result, "html.parser")
+        assert soup.find("caption").get_text() == "Informe Anual"
+        assert soup.find("td").get_text() == "Ingresos"
+
+    def test_caption_translated_before_cells(self, localize_block):
+        """Caption segment is consumed first; cells use subsequent indices."""
+        html = (
+            "<table>"
+            "<caption>Title</caption>"
+            "<tbody><tr><td>A</td><td>B</td></tr></tbody>"
+            "</table>"
+        )
+        segs = self._segs(("Título", 0), ("Alfa", 1), ("Beta", 2))
+        result = localize_block.restore_translated_segments(html, segs)
+        soup = BeautifulSoup(result, "html.parser")
+        assert soup.find("caption").get_text() == "Título"
+        cells = [td.get_text() for td in soup.find_all("td")]
+        assert cells == ["Alfa", "Beta"]
 
     def test_round_trip_extract_then_restore(self, localize_block):
         """Segments extracted from a table can be restored to produce the
