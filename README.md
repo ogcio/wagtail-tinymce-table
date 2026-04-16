@@ -23,7 +23,7 @@ A set of [Wagtail](https://wagtail.org/) StreamField blocks that embed a [TinyMC
 | Python | 3.9 |
 | Django | 4.2 |
 | Wagtail | 4.0 |
-| django-tinymce | 3.5 |
+| django-tinymce | 5.0 |
 | bleach | 6.0 |
 | beautifulsoup4 | 4.12 |
 | lxml | 4.9 |
@@ -42,7 +42,7 @@ A set of [Wagtail](https://wagtail.org/) StreamField blocks that embed a [TinyMC
 pip install wagtail-tinymce
 ```
 
-### From Git (`master` branch)
+### From Git (`master` branch — TinyMCE 7, django-tinymce ≥ 5.0)
 
 ```bash
 pip install git+https://github.com/ogcio/wagtail-tinymce-table.git@master
@@ -52,6 +52,20 @@ In a `requirements.txt` file (PEP 508):
 
 ```text
 wagtail-tinymce @ git+https://github.com/ogcio/wagtail-tinymce-table.git@master
+```
+
+### Legacy version (TinyMCE 6, django-tinymce ≥ 3.5)
+
+If your project requires  (TinyMCE 6), install the  tag instead:
+
+```bash
+pip install git+https://github.com/ogcio/wagtail-tinymce-table.git@v0.1.0
+```
+
+In a `requirements.txt` file (PEP 508):
+
+```text
+wagtail-tinymce @ git+https://github.com/ogcio/wagtail-tinymce-table.git@v0.1.0
 ```
 
 ---
@@ -365,6 +379,12 @@ The test suite has **75 tests** covering:
 ---
 
 ## Changelog
+
+### 0.2.0
+
+- Upgraded to **django-tinymce 5.0** (TinyMCE 7.8).
+- Package version bumped to 0.2.0.
+- Legacy v0.1.0 (django-tinymce ≥ 3.5 / TinyMCE 6) is preserved under the `v0.1.0` git tag.
 
 ### 0.1.0
 
