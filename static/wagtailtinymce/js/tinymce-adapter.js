@@ -42,7 +42,7 @@
             // The following eslint-disable-enxt-line no-undef
             // are set because those variables are defined via the JS files added
             // by the TinyMCE widget.
-            if (el.dataset.mceGzConf) {
+            if (el.dataset.mceGzConf && typeof tinyMCE_GZ !== 'undefined') {
                 // eslint-disable-next-line no-undef
                 tinyMCE_GZ.init(JSON.parse(el.dataset.mceGzConf));
             }
