@@ -48,13 +48,15 @@ class TinyMCEBlock(RawHTMLBlock):
         )
 
     def sanitize(self, value):
-        return bleach.clean(
-            value,
-            attributes=self.allowed_attributes,
-            tags=self.allowed_tags,
-            strip=True,
-            strip_comments=True,
-        )
+        # bleach 6.x raises TypeError when tags or attributes is None rather
+        # than falling back to its built-in defaults.  Only forward these
+        # kwargs when the subclass has explicitly set them.
+        kwargs: dict = {"strip": True, "strip_comments": True}
+        if self.allowed_tags is not None:
+            kwargs["tags"] = self.allowed_tags
+        if self.allowed_attributes is not None:
+            kwargs["attributes"] = self.allowed_attributes
+        return bleach.clean(value, **kwargs)
 
     def value_from_form(self, value):
         if self.sanitize_input:
