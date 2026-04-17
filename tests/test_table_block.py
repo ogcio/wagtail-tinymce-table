@@ -446,6 +446,22 @@ class TestRestoreTranslatedSegments:
         cells = [td.get_text() for td in soup.find_all("td")]
         assert cells == ["Alfa", "Beta"]
 
+    def test_missing_segment_logs_error_not_stdout(self, localize_block, caplog, capsys):
+        """When segment count is short, the error must be logged via the Python
+        logging system — not printed to stdout — so it reaches Django's log
+        handlers and never leaks raw exception details to application output."""
+        import logging
+        html = "<table><tbody><tr><td>A</td><td>B</td></tr></tbody></table>"
+        # Only one segment for two cells — index 1 will be out of range
+        segs = self._segs(("Alfa", 0))
+        with caplog.at_level(logging.ERROR, logger="wagtailtinymce.core.table_block"):
+            localize_block.restore_translated_segments(html, segs)
+        # Error must appear in the log
+        assert any("Failed to restore translation segment" in r.message for r in caplog.records)
+        # Nothing must be printed to stdout
+        captured = capsys.readouterr()
+        assert captured.out == ""
+
     def test_round_trip_extract_then_restore(self, localize_block):
         """Segments extracted from a table can be restored to produce the
         translated version without any index errors."""

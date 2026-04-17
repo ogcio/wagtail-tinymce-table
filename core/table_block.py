@@ -1,8 +1,12 @@
+import logging
+
 from wagtail_localize.segments import StringSegmentValue
 
 from bs4 import BeautifulSoup, NavigableString
 
 from wagtailtinymce.blocks import TinyMCEBlock
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "TinyMCETableBlock",
@@ -169,8 +173,13 @@ class TinyMCETableBlock(TinyMCEBlock):
                                 cell += 1
                             elif text not in duplicate_elements.values():
                                 _replace_cell_text(caption, duplicate_elements[text])
-                        except Exception as e:
-                            print(e)
+                        except Exception:
+                            logger.exception(
+                                "Failed to restore translation segment at index %d "
+                                "(caption '%s'). Segment count may not match table structure.",
+                                cell,
+                                text,
+                            )
 
                 rows = table.find_all("tr")
                 for row in rows:
@@ -188,7 +197,12 @@ class TinyMCETableBlock(TinyMCEBlock):
                                 cell += 1
                             elif text not in duplicate_elements.values():
                                 _replace_cell_text(ele, duplicate_elements[text])
-                        except Exception as e:
-                            print(e)
+                        except Exception:
+                            logger.exception(
+                                "Failed to restore translation segment at index %d "
+                                "(cell '%s'). Segment count may not match table structure.",
+                                cell,
+                                text,
+                            )
 
             return str(soup)
