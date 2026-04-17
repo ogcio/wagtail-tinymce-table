@@ -1,6 +1,7 @@
 import warnings
 
 import bleach
+from bleach.css_sanitizer import CSSSanitizer
 from django import forms
 from django.utils.safestring import mark_safe
 from wagtail.blocks import RawHTMLBlock
@@ -79,6 +80,13 @@ class TinyMCEBlock(RawHTMLBlock):
             kwargs["tags"] = self.allowed_tags
         if self.allowed_attributes is not None:
             kwargs["attributes"] = self.allowed_attributes
+        # Without a CSSSanitizer, bleach emits NoCssSanitizerWarning and does
+        # not filter inline CSS — any property an editor injects would survive.
+        # Build one from the subclass allowlist when styles are declared.
+        if self.allowed_styles is not None:
+            kwargs["css_sanitizer"] = CSSSanitizer(
+                allowed_css_properties=self.allowed_styles
+            )
         return bleach.clean(value, **kwargs)
 
     def value_from_form(self, value):

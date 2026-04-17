@@ -105,6 +105,28 @@ class TestSanitize:
         result = table_block.sanitize(html)
         assert "javascript:" not in result
 
+    def test_preserves_allowed_inline_styles(self, table_block):
+        # width and border-collapse are in TinyMCETableBlock.allowed_styles
+        html = '<table style="width:100%;border-collapse:collapse"><tbody><tr><td>X</td></tr></tbody></table>'
+        result = table_block.sanitize(html)
+        assert "width" in result
+        assert "border-collapse" in result
+
+    def test_strips_disallowed_inline_styles(self, table_block):
+        # color and background-color are NOT in allowed_styles — must be stripped
+        html = '<table style="color:red;background-color:blue"><tbody><tr><td>X</td></tr></tbody></table>'
+        result = table_block.sanitize(html)
+        assert "color" not in result
+        assert "background-color" not in result
+
+    def test_no_css_sanitizer_warning_when_allowed_styles_set(self, table_block):
+        import warnings as _warnings
+        html = '<table style="width:50%"><tbody><tr><td>X</td></tr></tbody></table>'
+        with _warnings.catch_warnings():
+            _warnings.simplefilter("error")
+            # Should not raise NoCssSanitizerWarning when allowed_styles is set
+            table_block.sanitize(html)
+
 
 # ---------------------------------------------------------------------------
 # TinyMCEBlock.value_from_form()
