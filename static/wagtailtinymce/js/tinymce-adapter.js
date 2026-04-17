@@ -99,7 +99,7 @@
                 tinyMCE_GZ.init(JSON.parse(el.dataset.mceGzConf));
             }
             // eslint-disable-next-line no-undef
-            if (!tinyMCE.editors[id]) {
+            if (!tinyMCE.get(id)) {
                // eslint-disable-next-line no-undef
                tinyMCE.init(mce_conf);
             }
