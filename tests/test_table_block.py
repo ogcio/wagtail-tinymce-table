@@ -87,6 +87,12 @@ class TestConfiguration:
     def test_table_plugin_enabled(self):
         assert "table" in TinyMCETableBlock.custom_mce_config["plugins"]
 
+    def test_table_header_type_is_section_cells(self):
+        """tablerowheader must produce <thead> + <th>, not just <thead> + <td>.
+        The default TinyMCE value 'section' keeps <td> elements — 'sectionCells'
+        is required to get proper <th> markup in header rows."""
+        assert TinyMCETableBlock.custom_mce_config.get("table_header_type") == "sectionCells"
+
     def test_colspan_allowed_on_td(self):
         assert "colspan" in TinyMCETableBlock.allowed_attributes["td"]
 

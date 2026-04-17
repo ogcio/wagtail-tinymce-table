@@ -78,6 +78,10 @@ class TinyMCETableBlock(TinyMCEBlock):
         "table_advtab": False,
         "table_cell_advtab": False,
         "table_row_advtab": False,
+        # "sectionCells" moves the row into <thead> AND converts <td> → <th>.
+        # The default "section" only moves the row but keeps <td> elements,
+        # which is why header rows appeared without <th> markup.
+        "table_header_type": "sectionCells",
         "language": "en",
         "license_key": "gpl",
         "setup": _TFOOT_SETUP,
