@@ -380,11 +380,21 @@ The test suite has **75 tests** covering:
 
 ## Changelog
 
+### 0.2.1
+
+#### Bug fixes
+- **Header rows now produce `<th>` elements.** The default TinyMCE `table_header_type` value `"section"` moved rows into `<thead>` but kept `<td>` cells. Setting it to `"sectionCells"` correctly converts cells to `<th>` as well.
+- **Table `<caption>` text is now included in translatable segments.** The caption is extracted before row cells and restored in the same position, so it appears correctly in the Wagtail Localize translation UI.
+
 ### 0.2.0
 
-- Upgraded to **django-tinymce 5.0** (TinyMCE 7.8).
-- Package version bumped to 0.2.0.
-- Legacy v0.1.0 (django-tinymce ≥ 3.5 / TinyMCE 6) is preserved under the `v0.1.0` git tag.
+#### Breaking changes
+- **Requires `django-tinymce >= 5.0`** (previously 3.5). This bundles **TinyMCE 7.8** instead of TinyMCE 6.x. If you cannot upgrade `django-tinymce`, pin to the `v0.1.0` git tag.
+- **`wagtail-localize >= 1.5` is now a required dependency** (previously optional).
+
+#### Packaging
+- Fixed build backend from `setuptools.backends.legacy:build` to `setuptools.build_meta` for compatibility with older setuptools versions.
+- Fixed `package-dir` mapping so `pip install git+…` correctly installs the `wagtailtinymce` module (previously the package was silently installed empty).
 
 ### 0.1.0
 
