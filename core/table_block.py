@@ -8,37 +8,11 @@ __all__ = [
     "TinyMCETableBlock",
 ]
 
-# JavaScript function (serialised as a string) that registers a custom TinyMCE
-# toolbar button which toggles the currently selected row between <tbody> and
-# <tfoot>.  The JS adapter in tinymce-adapter.js evals any setup value that
-# contains a "(" character, so a plain arrow-function expression is sufficient.
-_TFOOT_SETUP = (
-    "(editor) => {"
-    "  editor.ui.registry.addButton('tablefooterrow', {"
-    "    text: 'Footer Row',"
-    "    tooltip: 'Toggle selected row as table footer',"
-    "    onAction: () => {"
-    "      const node = editor.selection.getNode();"
-    "      const row = editor.dom.getParent(node, 'tr');"
-    "      if (!row) return;"
-    "      const parent = row.parentNode;"
-    "      const table = editor.dom.getParent(row, 'table');"
-    "      if (!table) return;"
-    "      if (parent.tagName.toLowerCase() === 'tfoot') {"
-    "        let tbody = table.querySelector('tbody');"
-    "        if (!tbody) { tbody = editor.dom.create('tbody'); table.appendChild(tbody); }"
-    "        tbody.appendChild(row);"
-    "        if (!parent.hasChildNodes()) parent.remove();"
-    "      } else {"
-    "        let tfoot = table.querySelector('tfoot');"
-    "        if (!tfoot) { tfoot = editor.dom.create('tfoot'); table.appendChild(tfoot); }"
-    "        tfoot.appendChild(row);"
-    "        if (!parent.hasChildNodes()) parent.remove();"
-    "      }"
-    "    }"
-    "  });"
-    "}"
-)
+# Registry key used by tinymce-adapter.js to look up the "Footer Row" toolbar
+# button setup function.  The actual JS implementation lives in
+# tinymce-adapter.js under window.wagtailTinyMCECallbacks['tablefooterrow'],
+# keeping executable code out of serialised config strings.
+_TFOOT_SETUP = "tablefooterrow"
 
 
 def _replace_cell_text(cell_tag, translated_text):
