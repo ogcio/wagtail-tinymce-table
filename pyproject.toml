@@ -11,6 +11,11 @@ license = { text = "MIT" }
 requires-python = ">=3.9"
 dependencies = [
     "wagtail>=4.0",
+    # Django is a transitive dependency via wagtail but we pin an explicit
+    # minimum to ensure no known-vulnerable version is resolved.
+    # 4.2.15 is the first 4.2 LTS release with all CVEs through mid-2024 fixed.
+    # 5.0.x users should be on >=5.0.11 (CVE-2024-53907/53908 fixed there).
+    "django>=4.2.15",
     "django-tinymce>=5.0",
     "bleach>=6.0,<7",
     "beautifulsoup4>=4.12",
