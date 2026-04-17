@@ -1,9 +1,21 @@
+import warnings
+
 import bleach
 from django import forms
 from django.utils.safestring import mark_safe
 from wagtail.blocks import RawHTMLBlock
 
 from .widgets import WagtailTinyMCE
+
+
+class SanitizationDisabledWarning(UserWarning):
+    """Emitted when a TinyMCEBlock is instantiated with sanitize_input=False.
+
+    Disabling sanitization means all HTML submitted by editors is passed
+    directly to mark_safe() without any filtering.  Only use this flag in
+    environments where every editor account is fully trusted and the rendered
+    output is never shown to untrusted users.
+    """
 
 
 class TinyMCEBlock(RawHTMLBlock):
@@ -33,6 +45,17 @@ class TinyMCEBlock(RawHTMLBlock):
         self.menubar_options = menubar_options
         self.toolbar_options = toolbar_options
         self.sanitize_input = sanitize_input
+
+        if not sanitize_input:
+            warnings.warn(
+                f"{self.__class__.__name__} was instantiated with sanitize_input=False. "
+                "All HTML submitted by editors will be passed to mark_safe() without "
+                "any sanitization. Only use this in fully trusted environments where "
+                "every editor account is trusted and output is never shown to "
+                "untrusted users.",
+                SanitizationDisabledWarning,
+                stacklevel=2,
+            )
 
         super().__init__(required=required, help_text=help_text, validators=validators, **kwargs)
 

@@ -10,7 +10,7 @@ Tests for TinyMCEBlock (blocks.py) and WagtailTinyMCE widget (widgets.py).
 import pytest
 from django.utils.safestring import SafeData
 
-from wagtailtinymce.blocks import TinyMCEBlock
+from wagtailtinymce.blocks import SanitizationDisabledWarning, TinyMCEBlock
 from wagtailtinymce.core.table_block import TinyMCETableBlock
 from wagtailtinymce.widgets import WagtailTinyMCE, WagtailTinyMCEAdapter
 
@@ -127,11 +127,13 @@ class TestValueFromForm:
         result = table_block.value_from_form(html)
         assert isinstance(result, SafeData)
 
-    def test_skips_sanitize_when_disabled(self):
-        block = TinyMCETableBlock(sanitize_input=False)
+    def test_skips_sanitize_when_disabled_and_emits_warning(self):
+        # sanitize_input=False is intentionally dangerous — the block must
+        # emit SanitizationDisabledWarning so misuse is never silent.
+        with pytest.warns(SanitizationDisabledWarning, match="sanitize_input=False"):
+            block = TinyMCETableBlock(sanitize_input=False)
         raw = "<table><tbody><tr><td><script>x</script></td></tr></tbody></table>"
         result = block.value_from_form(raw)
-        # sanitize_input=False → raw HTML is passed through unchanged
         assert "<script>" in result
 
     def test_empty_string_returns_safe_empty(self, table_block):
