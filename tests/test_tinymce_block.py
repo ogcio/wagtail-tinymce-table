@@ -105,6 +105,36 @@ class TestSanitize:
         result = table_block.sanitize(html)
         assert "javascript:" not in result
 
+    def test_target_blank_gets_noopener(self, table_block):
+        html = (
+            '<table><tbody><tr><td>'
+            '<a href="https://example.com" target="_blank">External</a>'
+            '</td></tr></tbody></table>'
+        )
+        result = table_block.sanitize(html)
+        assert 'rel="noopener noreferrer"' in result
+
+    def test_non_blank_target_unchanged(self, table_block):
+        # target="_self" must not have rel injected
+        html = (
+            '<table><tbody><tr><td>'
+            '<a href="https://example.com" target="_self">Internal</a>'
+            '</td></tr></tbody></table>'
+        )
+        result = table_block.sanitize(html)
+        assert "noopener" not in result
+
+    def test_existing_rel_overwritten_for_blank_target(self, table_block):
+        # An attacker-supplied rel="opener" must be replaced, not appended
+        html = (
+            '<table><tbody><tr><td>'
+            '<a href="https://example.com" target="_blank" rel="opener">Bad</a>'
+            '</td></tr></tbody></table>'
+        )
+        result = table_block.sanitize(html)
+        assert "opener" not in result or "noopener noreferrer" in result
+        assert 'rel="noopener noreferrer"' in result
+
     def test_preserves_allowed_inline_styles(self, table_block):
         # width and border-collapse are in TinyMCETableBlock.allowed_styles
         html = '<table style="width:100%;border-collapse:collapse"><tbody><tr><td>X</td></tr></tbody></table>'

@@ -2,11 +2,29 @@ import warnings
 
 import bleach
 from bleach.css_sanitizer import CSSSanitizer
+from bs4 import BeautifulSoup
 from django import forms
 from django.utils.safestring import mark_safe
 from wagtail.blocks import RawHTMLBlock
 
 from .widgets import WagtailTinyMCE
+
+
+def _enforce_link_safety(html: str) -> str:
+    """Add rel="noopener noreferrer" to every <a target="_blank"> link.
+
+    A link that opens in a new tab gives the opened page access to
+    window.opener, allowing it to redirect the parent tab (tabnabbing).
+    Adding rel="noopener noreferrer" severs that reference.
+
+    This runs after bleach.clean() so the HTML structure is already
+    normalised and safe to parse as a fragment.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    for a_tag in soup.find_all("a"):
+        if a_tag.get("target") == "_blank":
+            a_tag["rel"] = "noopener noreferrer"
+    return str(soup)
 
 
 class SanitizationDisabledWarning(UserWarning):
@@ -87,7 +105,8 @@ class TinyMCEBlock(RawHTMLBlock):
             kwargs["css_sanitizer"] = CSSSanitizer(
                 allowed_css_properties=self.allowed_styles
             )
-        return bleach.clean(value, **kwargs)
+        result = bleach.clean(value, **kwargs)
+        return _enforce_link_safety(result)
 
     def value_from_form(self, value):
         if self.sanitize_input:
