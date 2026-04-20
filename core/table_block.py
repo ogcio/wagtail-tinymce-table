@@ -62,6 +62,7 @@ class TinyMCETableBlock(TinyMCEBlock):
         "table_header_type": "sectionCells",
         "language": "en",
         "license_key": "gpl",
+        "promotion": False,
         "setup": _TFOOT_SETUP,
     }
 

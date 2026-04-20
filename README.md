@@ -380,6 +380,12 @@ The test suite has **75 tests** covering:
 
 ## Changelog
 
+### 0.2.4
+
+#### Behaviour
+
+- **`TinyMCETableBlock` disables the TinyMCE self-hosted upgrade banner.** The default editor config now sets `promotion: false`, which removes the “Get all features” / Tiny Cloud promotion link from the top of the table editor UI.
+
 ### 0.2.1
 
 #### Bug fixes
