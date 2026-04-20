@@ -50,10 +50,8 @@ class TinyMCETableBlock(TinyMCEBlock):
             " | tableinsertcolbefore tableinsertcolafter tabledeletecol"
         ),
         "table_appearance_options": False,
-        # Stamp every new table with the host app's CSS hook class so it
-        # inherits styles like border, padding, and colour out of the box.
-        "table_default_attributes": {"class": "table"},
-        "table_default_styles": {"border-collapse": "collapse", "width": "100%"},
+        "table_default_attributes": {},
+        "table_default_styles": {},
         "table_sizing_mode": "relative",
         "table_advtab": False,
         "table_cell_advtab": False,

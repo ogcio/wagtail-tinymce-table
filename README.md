@@ -56,7 +56,7 @@ wagtail-tinymce @ git+https://github.com/ogcio/wagtail-tinymce-table.git@master
 
 ### Legacy version (TinyMCE 6, django-tinymce ≥ 3.5)
 
-If your project requires  (TinyMCE 6), install the  tag instead:
+If your project requires TinyMCE 6, install the `v0.1.0` tag instead:
 
 ```bash
 pip install git+https://github.com/ogcio/wagtail-tinymce-table.git@v0.1.0
@@ -300,15 +300,61 @@ class MyTableBlock(TinyMCETableBlock):
     allowed_tags = TinyMCETableBlock.allowed_tags + ["figure", "figcaption"]
 ```
 
-### Mirroring your site's CSS inside the editor
+### Applying your site's table styles to new tables
 
-TinyMCE renders inside an **iframe**, completely isolated from your host app's stylesheet. By default the table editor therefore looks different from the published page. Use `content_css` to load your compiled stylesheet into the iframe so the editing experience matches the frontend exactly.
+There are two independent concerns here:
 
-Subclass `TinyMCETableBlock` and add the key to `custom_mce_config`:
+1. **Frontend rendering** — making the published page apply your site's CSS to new tables.
+2. **Editor preview** — making the TinyMCE iframe look the same as the frontend.
+
+#### 1. Frontend rendering
+
+`TinyMCETableBlock` stores a plain `<table>` element. All tables rendered inside
+`<section class="block-table">` can be targeted in your site's stylesheet without
+needing to add any class to the table itself:
+
+```css
+/* targets every TinyMCE table block on the published page */
+section.block-table table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+section.block-table table td,
+section.block-table table th {
+    border: 1px solid #dbdbdb;
+    padding: 0.5em 0.75em;
+    vertical-align: top;
+}
+```
+
+This approach is CSS-framework-agnostic and works regardless of what class (if any)
+the table carries.
+
+**If your framework uses a CSS class hook** (e.g. Bulma's `.table.is-bordered`),
+stamp every new table with that class via `table_default_attributes`:
 
 ```python
-from wagtailtinymce.core.table_block import TinyMCETableBlock
+class MyTableBlock(TinyMCETableBlock):
+    custom_mce_config = {
+        **TinyMCETableBlock.custom_mce_config,
+        # Bulma example — adjust to your framework's class names
+        "table_default_attributes": {"class": "table is-bordered"},
+    }
+```
 
+> **Note on CSS specificity:** a class selector (`.table td`, specificity 0,1,1)
+> overrides an element selector (`table td`, specificity 0,0,2). If your site has
+> a generic `table td` rule *and* a `.table td` rule, the class rule wins for tables
+> that carry the class. Make sure the class-scoped rules include everything you need.
+
+#### 2. Editor preview
+
+TinyMCE renders inside an **iframe** isolated from your host stylesheet. Use
+`content_css` to load your compiled stylesheet into the iframe so the editing
+experience matches the frontend:
+
+```python
 class MyTableBlock(TinyMCETableBlock):
     custom_mce_config = {
         **TinyMCETableBlock.custom_mce_config,
@@ -317,20 +363,16 @@ class MyTableBlock(TinyMCETableBlock):
     }
 ```
 
-If you only need a small number of rules (e.g. just table styles), you can inline them with `content_style` instead — no extra HTTP request:
+If you only need a small number of rules you can inline them with `content_style`
+instead — no extra HTTP request:
 
 ```python
 class MyTableBlock(TinyMCETableBlock):
     custom_mce_config = {
         **TinyMCETableBlock.custom_mce_config,
         "content_style": (
-            ".table { background-color: white; color: #363636; }"
-            ".table td, .table th {"
-            "  border: 1px solid #dbdbdb;"
-            "  border-width: 0 0 1px;"
-            "  padding: 0.5em 0.75em;"
-            "  vertical-align: top;"
-            "}"
+            "table { border-collapse: collapse; width: 100%; }"
+            "td, th { border: 1px solid #dbdbdb; padding: 0.5em 0.75em; }"
         ),
     }
 ```
@@ -417,15 +459,22 @@ The test suite has **75 tests** covering:
 
 ## Changelog
 
-### 0.2.5
+### 0.2.6
 
 #### Behaviour
 
-- **New tables automatically receive the host app's CSS class.** `table_default_attributes` is now set to `{"class": "table"}`, so every table inserted via the toolbar is stamped with `class="table"` in the saved HTML. This ensures frameworks and stylesheets that scope table rules to `.table` (e.g. Bulma, or custom site CSS) apply immediately on the published page without any template changes.
+- **Inline styles removed from new tables.** `table_default_styles` is now `{}` (previously `{"border-collapse": "collapse", "width": "100%"}`). Inline styles have the highest CSS specificity and were silently overriding any site-level table rules. New tables are now stored as plain `<table>` elements with no inline `style` attribute, giving the host app's stylesheet full, unobstructed control.
+- **`table_default_attributes` remains empty.** No CSS class is stamped on new tables by default. Integrating projects that use a class-based CSS framework can opt in via a subclass (see Customisation guide).
 
 #### Documentation
 
-- New **"Mirroring your site's CSS inside the editor"** section in the Customisation guide, covering `content_css` (load a full stylesheet into the TinyMCE iframe) and `content_style` (inline a small rule block directly).
+- **"Applying your site's table styles to new tables"** section added to the Customisation guide, covering: targeting tables via the `section.block-table` wrapper (framework-agnostic), opting in to a CSS class via `table_default_attributes`, and mirroring frontend styles inside the TinyMCE editor preview via `content_css` / `content_style`.
+
+### 0.2.5
+
+#### Documentation
+
+- Initial **"Mirroring your site's CSS inside the editor"** section added to the Customisation guide, covering `content_css` and `content_style` for loading host-app styles into the TinyMCE iframe.
 
 ### 0.2.4
 
