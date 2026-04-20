@@ -300,6 +300,43 @@ class MyTableBlock(TinyMCETableBlock):
     allowed_tags = TinyMCETableBlock.allowed_tags + ["figure", "figcaption"]
 ```
 
+### Mirroring your site's CSS inside the editor
+
+TinyMCE renders inside an **iframe**, completely isolated from your host app's stylesheet. By default the table editor therefore looks different from the published page. Use `content_css` to load your compiled stylesheet into the iframe so the editing experience matches the frontend exactly.
+
+Subclass `TinyMCETableBlock` and add the key to `custom_mce_config`:
+
+```python
+from wagtailtinymce.core.table_block import TinyMCETableBlock
+
+class MyTableBlock(TinyMCETableBlock):
+    custom_mce_config = {
+        **TinyMCETableBlock.custom_mce_config,
+        # Path served by Django's staticfiles — adjust to match your project.
+        "content_css": "/static/css/your-app.css",
+    }
+```
+
+If you only need a small number of rules (e.g. just table styles), you can inline them with `content_style` instead — no extra HTTP request:
+
+```python
+class MyTableBlock(TinyMCETableBlock):
+    custom_mce_config = {
+        **TinyMCETableBlock.custom_mce_config,
+        "content_style": (
+            ".table { background-color: white; color: #363636; }"
+            ".table td, .table th {"
+            "  border: 1px solid #dbdbdb;"
+            "  border-width: 0 0 1px;"
+            "  padding: 0.5em 0.75em;"
+            "  vertical-align: top;"
+            "}"
+        ),
+    }
+```
+
+> **Tip:** `content_css` and `content_style` can be combined — TinyMCE applies both.
+
 ### Disabling sanitization
 
 Set `sanitize_input=False` if you need to allow arbitrary HTML (only do this when the editor is trusted):
@@ -379,6 +416,16 @@ The test suite has **75 tests** covering:
 ---
 
 ## Changelog
+
+### 0.2.5
+
+#### Behaviour
+
+- **New tables automatically receive the host app's CSS class.** `table_default_attributes` is now set to `{"class": "table"}`, so every table inserted via the toolbar is stamped with `class="table"` in the saved HTML. This ensures frameworks and stylesheets that scope table rules to `.table` (e.g. Bulma, or custom site CSS) apply immediately on the published page without any template changes.
+
+#### Documentation
+
+- New **"Mirroring your site's CSS inside the editor"** section in the Customisation guide, covering `content_css` (load a full stylesheet into the TinyMCE iframe) and `content_style` (inline a small rule block directly).
 
 ### 0.2.4
 
