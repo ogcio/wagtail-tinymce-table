@@ -386,11 +386,38 @@ The test suite has **75 tests** covering:
 
 - **`TinyMCETableBlock` disables the TinyMCE self-hosted upgrade banner.** The default editor config now sets `promotion: false`, which removes the “Get all features” / Tiny Cloud promotion link from the top of the table editor UI.
 
+### 0.2.3
+
+#### Bug fixes
+
+- **TinyMCE 7 editor initialisation.** The Wagtail telepath adapter now uses `tinyMCE.get(id)` instead of `tinyMCE.editors[id]` when checking whether an editor instance already exists, matching the django-tinymce / TinyMCE 7 API.
+
+### 0.2.2
+
+Security hardening release (no change to table editing features). For step-by-step upgrade notes and fuller context, see [`CHANGELOG.md`](CHANGELOG.md).
+
+#### Security and robustness
+
+- **bleach 6.x** — `TinyMCEBlock.sanitize()` no longer passes `tags=None` or `attributes=None` into `bleach.clean()` (which breaks on bleach 6.x and could bypass allowlists on 5.x).
+- **Django minimum** — `django>=4.2.15` is declared explicitly so pip cannot resolve an older, known-vulnerable Django via Wagtail alone.
+- **No `eval()` in the adapter** — TinyMCE callbacks (e.g. `setup`) are resolved through `window.wagtailTinyMCECallbacks` (or `window.<name>`); unknown keys log a warning instead of executing arbitrary strings.
+- **`sanitize_input=False` is visible** — constructing a block with `sanitize_input=False` emits `SanitizationDisabledWarning` so disabling sanitisation is never silent.
+- **Inline CSS filtering** — when `allowed_styles` is set, sanitisation uses bleach’s `CSSSanitizer` so only allowlisted properties survive (for `TinyMCETableBlock`, `width` and `border-collapse`). Requires `bleach[css]`.
+- **Translation errors** — `restore_translated_segments()` uses `logger.exception()` instead of printing to stdout.
+- **Targeted links** — after sanitisation, `<a target="_blank">` gets `rel="noopener noreferrer"` to mitigate reverse tabnabbing.
+
+#### Dependencies
+
+- `bleach[css]>=6.0,<7` (was `bleach>=6.0` without the CSS extra).
+- `django>=4.2.15` added as an explicit requirement.
+- Optional dev extra: `pip-audit` for CVE scanning.
+
 ### 0.2.1
 
 #### Bug fixes
-- **Header rows now produce `<th>` elements.** The default TinyMCE `table_header_type` value `"section"` moved rows into `<thead>` but kept `<td>` cells. Setting it to `"sectionCells"` correctly converts cells to `<th>` as well.
-- **Table `<caption>` text is now included in translatable segments.** The caption is extracted before row cells and restored in the same position, so it appears correctly in the Wagtail Localize translation UI.
+
+- **Header rows now produce `<th>` elements.** The default TinyMCE `table_header_type` was changed from `"section"` to `"sectionCells"`. The former moved rows into `<thead>` but kept `<td>` cells; the latter also converts those cells to `<th>`.
+- **Table `<caption>` text is included in translatable segments.** `get_translatable_segments()` and `restore_translated_segments()` process `<caption>` in DOM order (before row cells) so captions appear in Wagtail Localize and segment indices stay aligned with cell content.
 
 ### 0.2.0
 
