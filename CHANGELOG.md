@@ -9,6 +9,62 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.2.8] — 2026-05-05
+
+### Fixed
+
+- **Existing translated content with literal `<br/>` text now renders as real
+  line breaks** (`core/table_block.py`)
+
+  The 0.2.7 fix correctly handled *new* translations, but cells that had
+  already been restored by the old code contained `<br/>` stored as plain
+  `NavigableString` text rather than real HTML `<br>` Tag elements.  This
+  caused two ongoing problems visible in the translation interface and on
+  published pages:
+
+  1. **Extraction of corrupted source cells** — `get_text()` faithfully returned
+     the literal `<br/>` characters as part of the segment text, so translators
+     saw (and could inadvertently preserve) raw HTML markup in their translation
+     strings.
+
+  2. **Restoration of literal-`<br/>` translations** — segment values already
+     stored in the database with literal `<br/>` characters (typed by translators
+     or output by translation tools) were written back into cells as plain text,
+     causing `<br/>` to appear verbatim on the published page.
+
+  Two further changes fix both paths:
+
+  - **`_normalize_br_text()`** — a new regex helper that converts any literal
+    `<br>`, `<br/>`, `<br />`, `<BR/>` string to `\n`.  Applied after every
+    `get_text()` call in `get_translatable_segments` and `restore_translated_segments`
+    so corrupted cells are normalised before segment keys are formed or matched.
+
+  - **`_replace_cell_text()` path decision** — normalization now runs before
+    the `if/else` branch.  The simple `replace_with` path is only taken when
+    `tag.string is not None` **and** the normalised translated text contains no
+    `\n`.  A "simple" cell whose NavigableString holds literal `<br/>` content
+    (normalised to `\n`) now correctly follows the reconstruction path and
+    produces real `<br>` elements rather than storing the `\n` as plain text.
+
+### Added
+
+- **`TestNormalizeBrText`** (`tests/test_replace_cell_text.py`) — 9 unit tests
+  for the `_normalize_br_text` helper: all `<br>` variants converted; plain
+  text and pre-existing `\n` unchanged; mixed forms handled.
+
+- **`TestBrReconstructionFromLiteralText`** (`tests/test_replace_cell_text.py`)
+  — 6 tests verifying that `_replace_cell_text` converts literal `<br>` text
+  in `translated_text` to real `<br>` elements, including the
+  `<br/><br/><br/>` triple-corruption pattern.
+
+- **`TestLiteralBrTextNormalization`** (`tests/test_table_block.py`) — 4
+  integration tests for the full cycle with corrupted source cells: extraction
+  strips literal `<br/>` from segment text, restoration converts stored literal
+  `<br/>` translations to real elements, and the triple-pattern end-to-end
+  round trip passes.
+
+---
+
 ## [0.2.7] — 2026-05-05
 
 ### Fixed
