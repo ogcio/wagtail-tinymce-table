@@ -9,6 +9,59 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.2.7] — 2026-05-05
+
+### Fixed
+
+- **`<br>` tags in table cells no longer lost or rendered as literal text during
+  translation** (`core/table_block.py`)
+
+  `get_translatable_segments()` previously used `get_text(separator=" ")`, which
+  collapsed every `<br>` tag into a space and discarded it. The extracted segment
+  text contained no line-break information, so translators either lost the
+  formatting entirely or manually typed `<br/>` as literal characters. After
+  restore, those literal characters appeared verbatim on the published page instead
+  of rendering as HTML line breaks.
+
+  Two targeted changes fix the full cycle:
+
+  1. **Extraction** — `get_text(separator="\n")` is now used for every cell and
+     caption lookup (both in `get_translatable_segments` and in the cell-matching
+     logic inside `restore_translated_segments`). Each `<br>` boundary in the
+     original HTML becomes a `\n` in the segment text, giving translators a natural
+     line-break marker to preserve.
+
+  2. **Restore** — `_replace_cell_text` now detects `\n` characters in the
+     translated text and reconstructs real `<br>` elements at each split point
+     instead of writing a plain `NavigableString`. Cells with no `\n` are
+     unchanged (plain text inserted as before).
+
+- **Stale test corrected** (`tests/test_table_block.py`)
+
+  `test_tfoot_setup_contains_open_paren` asserted that `_TFOOT_SETUP` contained
+  `"("` — a remnant from when the setup value was an `eval()`-able function
+  expression. After the 0.2.2 security hardening replaced `eval()` with a named
+  callback registry, `_TFOOT_SETUP` became a plain registry key (`"tablefooterrow"`)
+  with no parentheses. The test now asserts the correct invariant: that `"("` is
+  **not** present in the registry key.
+
+### Added
+
+- **`TestBrReconstruction`** (`tests/test_replace_cell_text.py`) — 8 new unit
+  tests covering `_replace_cell_text` when `translated_text` contains `\n`:
+  single newline → one `<br>`; multiple newlines → multiple `<br>` elements;
+  reconstructed `<br>` is a real HTML element not literal text; no-newline path
+  unchanged; edge cases for leading/trailing text nodes and many lines.
+
+- **`TestBrTagPreservation`** (`tests/test_table_block.py`) — 10 new integration
+  tests covering the complete extraction → translation → restoration cycle for
+  cells with `<br>`: segment text contains `\n` not literal `<br/>`; restored HTML
+  contains real `<br>` tags; correct text on each side of reconstructed break;
+  adjacent plain cells and segment indices unaffected; duplicate multi-line cells
+  de-duplicated correctly.
+
+---
+
 ## [0.2.6] — 2026-04-20
 
 ### Changed

@@ -74,9 +74,11 @@ class TestConfiguration:
     def test_setup_value_is_tfoot_setup(self):
         assert TinyMCETableBlock.custom_mce_config["setup"] is _TFOOT_SETUP
 
-    def test_tfoot_setup_contains_open_paren(self):
-        """JS adapter evals the setup string only when it contains '('."""
-        assert "(" in _TFOOT_SETUP
+    def test_tfoot_setup_is_callback_registry_key(self):
+        """_TFOOT_SETUP is a named callback-registry key, not an executable
+        string.  The JS adapter looks up window.wagtailTinyMCECallbacks[key]
+        rather than eval()-ing the string, so the value must not contain '('."""
+        assert "(" not in _TFOOT_SETUP
 
     def test_tfoot_setup_registers_tablefooterrow_button(self):
         assert "tablefooterrow" in _TFOOT_SETUP
@@ -485,3 +487,154 @@ class TestRestoreTranslatedSegments:
         assert "CHERRY" in texts
         # Empty cell must remain empty
         assert "" in texts
+
+
+# ---------------------------------------------------------------------------
+# <br> tag preservation through the translation round-trip
+# ---------------------------------------------------------------------------
+
+
+class TestBrTagPreservation:
+    """Tests that verify <br> tags inside cells survive extraction →
+    translation → restoration without becoming literal text or being lost."""
+
+    def test_br_cell_extracted_with_newline_separator(self, localize_block):
+        """A cell with <br> must produce a segment whose text uses \\n as
+        the line-break marker (not a space, and not literal '<br/>')."""
+        html = "<table><tbody><tr><td>line1<br/>line2</td></tr></tbody></table>"
+        segs = localize_block.get_translatable_segments(html)
+        assert len(segs) == 1
+        assert segs[0].string.data == "line1\nline2"
+
+    def test_multi_br_cell_extracted_correctly(self, localize_block):
+        """Multiple <br> elements inside one cell produce the right number
+        of \\n markers in the extracted segment."""
+        html = "<table><tbody><tr><td>a<br/>b<br/>c</td></tr></tbody></table>"
+        segs = localize_block.get_translatable_segments(html)
+        assert len(segs) == 1
+        assert segs[0].string.data == "a\nb\nc"
+
+    def test_br_cell_segment_contains_no_literal_br_tag(self, localize_block):
+        """The extracted segment text must never contain the literal string
+        '<br' — that would be the broken pre-fix behaviour."""
+        html = "<table><tbody><tr><td>text1<br/>text2</td></tr></tbody></table>"
+        segs = localize_block.get_translatable_segments(html)
+        assert "<br" not in segs[0].string.data
+
+    def test_restore_newline_produces_br_in_output(self, localize_block):
+        """Restoring a segment whose text contains \\n must write a real
+        <br> element into the cell, not plain text."""
+        html = "<table><tbody><tr><td>line1<br/>line2</td></tr></tbody></table>"
+        segs = [MockSegment("", "linea1\nlinea2", 0)]
+        result = localize_block.restore_translated_segments(html, segs)
+        soup = BeautifulSoup(result, "html.parser")
+        td = soup.find("td")
+        assert td.find("br") is not None
+
+    def test_restore_br_text_correct_after_translation(self, localize_block):
+        """Text on each side of the reconstructed <br> must match the
+        translated text."""
+        html = "<table><tbody><tr><td>before<br/>after</td></tr></tbody></table>"
+        segs = [MockSegment("", "avant\naprès", 0)]
+        result = localize_block.restore_translated_segments(html, segs)
+        soup = BeautifulSoup(result, "html.parser")
+        td = soup.find("td")
+        assert td.get_text(separator="\n") == "avant\naprès"
+
+    def test_restored_br_is_not_literal_text(self, localize_block):
+        """After restore the <br> must not appear as the escaped string
+        '&lt;br' or the literal characters '<br' inside a text node."""
+        html = "<table><tbody><tr><td>a<br/>b</td></tr></tbody></table>"
+        segs = [MockSegment("", "x\ny", 0)]
+        result = localize_block.restore_translated_segments(html, segs)
+        assert "&lt;br" not in result
+        # The literal <br> or <br/> tag should be present in the HTML output
+        assert "<br" in result
+
+    def test_full_round_trip_preserves_br(self, localize_block):
+        """End-to-end: extract a cell with <br>, produce translated segments
+        that keep \\n, restore → the published HTML has a real <br>."""
+        original = (
+            "<table><tbody>"
+            "<tr>"
+            "<td>- First bullet<br/>- Second bullet<br/>- Third bullet</td>"
+            "<td>Header</td>"
+            "</tr>"
+            "</tbody></table>"
+        )
+        extracted = localize_block.get_translatable_segments(original)
+        by_text = {s.string.data: s for s in extracted}
+
+        assert "- First bullet\n- Second bullet\n- Third bullet" in by_text
+        assert "Header" in by_text
+
+        translated = [
+            MockSegment(
+                "",
+                "- Premier point\n- Deuxième point\n- Troisième point",
+                by_text["- First bullet\n- Second bullet\n- Third bullet"].order,
+            ),
+            MockSegment("", "En-tête", by_text["Header"].order),
+        ]
+        result = localize_block.restore_translated_segments(original, translated)
+        soup = BeautifulSoup(result, "html.parser")
+        tds = soup.find_all("td")
+
+        # Multi-line cell: two <br> elements, correct text
+        assert len(tds[0].find_all("br")) == 2
+        assert tds[0].get_text(separator="\n") == (
+            "- Premier point\n- Deuxième point\n- Troisième point"
+        )
+        # Plain cell: unchanged structure
+        assert tds[1].get_text() == "En-tête"
+
+    def test_br_cell_alongside_plain_cell_indices_correct(self, localize_block):
+        """A <br> cell must not disrupt the segment ordering of adjacent plain cells."""
+        html = (
+            "<table><tbody>"
+            "<tr><td>plain</td><td>multi<br/>line</td><td>last</td></tr>"
+            "</tbody></table>"
+        )
+        segs = localize_block.get_translatable_segments(html)
+        by_text = {s.string.data: s.order for s in segs}
+        assert by_text["plain"] == 0
+        assert by_text["multi\nline"] == 1
+        assert by_text["last"] == 2
+
+    def test_duplicate_br_cells_get_same_translation(self, localize_block):
+        """Duplicate multi-line cells must be de-duplicated and both receive
+        the same translated text, matching the behaviour for plain cells."""
+        html = (
+            "<table><tbody>"
+            "<tr><td>a<br/>b</td><td>a<br/>b</td><td>other</td></tr>"
+            "</tbody></table>"
+        )
+        segs = localize_block.get_translatable_segments(html)
+        # Only one segment for the duplicate
+        assert len([s for s in segs if s.string.data == "a\nb"]) == 1
+
+        translated = [
+            MockSegment("", "x\ny", segs[0].order),
+            MockSegment("", "otro", segs[1].order),
+        ]
+        result = localize_block.restore_translated_segments(html, translated)
+        soup = BeautifulSoup(result, "html.parser")
+        tds = soup.find_all("td")
+        assert tds[0].get_text(separator="\n") == "x\ny"
+        assert tds[1].get_text(separator="\n") == "x\ny"
+        assert tds[2].get_text() == "otro"
+
+    def test_plain_cell_unchanged_when_neighbour_has_br(self, localize_block):
+        """Plain cells in the same row as a <br> cell must restore correctly."""
+        html = (
+            "<table><tbody>"
+            "<tr><td>plain</td><td>multi<br/>line</td></tr>"
+            "</tbody></table>"
+        )
+        segs = [MockSegment("", "llano", 0), MockSegment("", "multi\nlínea", 1)]
+        result = localize_block.restore_translated_segments(html, segs)
+        soup = BeautifulSoup(result, "html.parser")
+        tds = soup.find_all("td")
+        assert tds[0].get_text() == "llano"
+        assert tds[1].find("br") is not None
+        assert tds[1].get_text(separator="\n") == "multi\nlínea"

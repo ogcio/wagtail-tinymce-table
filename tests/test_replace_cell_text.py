@@ -126,3 +126,82 @@ class TestCompoundCell:
         assert cell.string is None
         _replace_cell_text(cell, "Fusionada")
         assert cell.get_text() == "Fusionada"
+
+
+# ---------------------------------------------------------------------------
+# <br> reconstruction from \n in translated text
+# ---------------------------------------------------------------------------
+
+
+class TestBrReconstruction:
+    """When translated_text contains \\n, _replace_cell_text must reconstruct
+    real <br> elements so line breaks render correctly on the published page.
+    This is the counterpart to get_text(separator="\\n") used in extraction."""
+
+    def test_single_newline_becomes_one_br(self):
+        """\\n in translated text → one <br> element inserted."""
+        cell = _cell("<td>before<br/>after</td>")
+        assert cell.string is None, "precondition: br makes cell compound"
+        _replace_cell_text(cell, "avant\naprès")
+        assert cell.find("br") is not None
+        assert cell.get_text(separator="\n") == "avant\naprès"
+
+    def test_two_newlines_become_two_brs(self):
+        """Three lines separated by \\n → two <br> elements."""
+        cell = _cell("<td>a<br/>b<br/>c</td>")
+        _replace_cell_text(cell, "x\ny\nz")
+        brs = cell.find_all("br")
+        assert len(brs) == 2
+        text_nodes = [s for s in cell.strings]
+        assert text_nodes == ["x", "y", "z"]
+
+    def test_br_element_is_real_html_not_literal_text(self):
+        """The restored <br> must be a Tag, not the literal string '<br/>'."""
+        cell = _cell("<td>line1<br/>line2</td>")
+        _replace_cell_text(cell, "line1_t\nline2_t")
+        br = cell.find("br")
+        assert br is not None
+        # Serialised output must contain a real <br> tag, not escaped text
+        html = str(cell)
+        assert "<br/>" in html or "<br>" in html
+        assert "&lt;br" not in html
+
+    def test_no_newline_no_br_added(self):
+        """Without \\n the compound path falls back to plain NavigableString."""
+        cell = _cell("<td><p>A</p><p>B</p></td>")
+        _replace_cell_text(cell, "single line")
+        assert cell.find("br") is None
+        assert cell.get_text() == "single line"
+
+    def test_leading_text_correct_after_br_reconstruction(self):
+        """Text before the first <br> must be the first NavigableString child."""
+        cell = _cell("<td>first<br/>second</td>")
+        _replace_cell_text(cell, "primero\nsegundo")
+        children = list(cell.children)
+        first_text = next(c for c in children if isinstance(c, NavigableString))
+        assert str(first_text) == "primero"
+
+    def test_trailing_text_correct_after_br_reconstruction(self):
+        """Text after the last <br> must be the last NavigableString child."""
+        cell = _cell("<td>first<br/>second</td>")
+        _replace_cell_text(cell, "primero\nsegundo")
+        text_nodes = [str(s) for s in cell.strings]
+        assert text_nodes[-1] == "segundo"
+
+    def test_br_reconstruction_with_many_lines(self):
+        """Edge case: many lines create the right number of <br> elements."""
+        original = "<br/>".join(f"line{i}" for i in range(5))
+        cell = _cell(f"<td>{original}</td>")
+        translated = "\n".join(f"línea{i}" for i in range(5))
+        _replace_cell_text(cell, translated)
+        assert len(cell.find_all("br")) == 4
+        assert cell.get_text(separator="\n") == translated
+
+    def test_simple_cell_unaffected_by_newline_logic(self):
+        """Simple cells (string is not None) must still use replace_with,
+        even if the translated text contains a \\n character."""
+        cell = _cell("<td>plain</td>")
+        assert cell.string is not None, "precondition"
+        _replace_cell_text(cell, "line1\nline2")
+        # replace_with path: cell.string is set, no <br> created
+        assert cell.string == "line1\nline2"

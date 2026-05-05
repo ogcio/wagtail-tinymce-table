@@ -22,19 +22,29 @@ _TFOOT_SETUP = "tablefooterrow"
 def _replace_cell_text(cell_tag, translated_text):
     """Replace the visible text of a BeautifulSoup cell tag with *translated_text*.
 
-    Two cases:
+    Three cases:
     - Simple cell: the tag has a single NavigableString child (``tag.string`` is
       not None).  We call ``replace_with`` directly on that string.
-    - Compound cell: the tag contains child elements (e.g. ``<p>``, ``<strong>``).
-      ``tag.string`` is None for such tags in BeautifulSoup.  We clear the tag and
-      insert the translated plain text as a new NavigableString, which intentionally
-      drops inner formatting because the translation system operates on plain text.
+    - Multi-line compound cell: ``translated_text`` contains ``\\n`` separators,
+      produced by ``get_text(separator="\\n")`` on a cell that had ``<br>`` or
+      multiple block-level children.  We reconstruct a real ``<br>`` element for
+      each ``\\n`` so the published page renders line breaks correctly.
+    - Single-line compound cell: we clear the tag and insert the translated plain
+      text as a new NavigableString, which intentionally drops inner formatting
+      because the translation system operates on plain text.
     """
     if cell_tag.string is not None:
         cell_tag.string.replace_with(translated_text)
     else:
         cell_tag.clear()
-        cell_tag.append(NavigableString(translated_text))
+        lines = translated_text.split("\n")
+        if len(lines) > 1:
+            for i, line in enumerate(lines):
+                cell_tag.append(NavigableString(line))
+                if i < len(lines) - 1:
+                    cell_tag.append(BeautifulSoup("<br/>", "html.parser").br)
+        else:
+            cell_tag.append(NavigableString(translated_text))
 
 
 class TinyMCETableBlock(TinyMCEBlock):
@@ -120,7 +130,7 @@ class TinyMCETableBlock(TinyMCEBlock):
             # must be handled explicitly before the row loop.
             caption = table.find("caption")
             if caption is not None:
-                text = caption.get_text(separator=" ").strip()
+                text = caption.get_text(separator="\n").strip()
                 if text and text not in duplicate_elements:
                     segments.append(StringSegmentValue("", text, order=col))
                     duplicate_elements.append(text)
@@ -131,7 +141,7 @@ class TinyMCETableBlock(TinyMCEBlock):
                 # Include both <td> (body/footer cells) and <th> (header cells).
                 cells = row.find_all(["td", "th"])
                 for elem in cells:
-                    text = elem.get_text(separator=" ").strip()
+                    text = elem.get_text(separator="\n").strip()
                     # Skip empty cells and cells that contain nested tables.
                     # The truthiness guard (bool(text)) ensures the first empty
                     # cell is not mistakenly added as a segment, which would
@@ -164,7 +174,7 @@ class TinyMCETableBlock(TinyMCEBlock):
                 # Restore caption before processing rows, mirroring extraction order.
                 caption = table.find("caption")
                 if caption is not None:
-                    text = caption.get_text(separator=" ").strip()
+                    text = caption.get_text(separator="\n").strip()
                     if text:
                         try:
                             translated = sorted_segment[cell].string.data
@@ -187,7 +197,7 @@ class TinyMCETableBlock(TinyMCEBlock):
                     # Mirror the same cell selector used in get_translatable_segments.
                     cells = row.find_all(["td", "th"])
                     for ele in cells:
-                        text = ele.get_text(separator=" ").strip()
+                        text = ele.get_text(separator="\n").strip()
                         if not text or ele.find("table"):
                             continue
                         try:
