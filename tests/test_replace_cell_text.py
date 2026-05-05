@@ -9,7 +9,7 @@ These tests exercise the two code paths:
 import pytest
 from bs4 import BeautifulSoup, NavigableString
 
-from wagtailtinymce.core.table_block import _replace_cell_text
+from wagtailtinymce.core.table_block import _replace_cell_text, _normalize_br_text
 
 
 def _cell(html_fragment):
@@ -197,11 +197,100 @@ class TestBrReconstruction:
         assert len(cell.find_all("br")) == 4
         assert cell.get_text(separator="\n") == translated
 
-    def test_simple_cell_unaffected_by_newline_logic(self):
-        """Simple cells (string is not None) must still use replace_with,
-        even if the translated text contains a \\n character."""
+    def test_simple_cell_with_newline_reconstructs_br(self):
+        """A simple cell (tag.string is not None) where translated text
+        contains \\n must take the reconstruction path and emit real <br>
+        elements.  This covers corrupted cells whose single NavigableString
+        held literal '<br/>' text: the normalised segment carries \\n, so
+        the translated text does too, and the restore must produce real tags."""
         cell = _cell("<td>plain</td>")
         assert cell.string is not None, "precondition"
         _replace_cell_text(cell, "line1\nline2")
-        # replace_with path: cell.string is set, no <br> created
-        assert cell.string == "line1\nline2"
+        assert cell.find("br") is not None
+        assert list(cell.strings) == ["line1", "line2"]
+
+
+# ---------------------------------------------------------------------------
+# _normalize_br_text helper
+# ---------------------------------------------------------------------------
+
+
+class TestNormalizeBrText:
+    """Unit tests for the _normalize_br_text helper that converts literal
+    <br> text variants to \\n so the round-trip is consistent regardless of
+    whether previous restore cycles left literal '<br/>' in cell content."""
+
+    def test_br_self_closing_replaced(self):
+        assert _normalize_br_text("a<br/>b") == "a\nb"
+
+    def test_br_open_replaced(self):
+        assert _normalize_br_text("a<br>b") == "a\nb"
+
+    def test_br_with_space_replaced(self):
+        assert _normalize_br_text("a<br />b") == "a\nb"
+
+    def test_br_uppercase_replaced(self):
+        assert _normalize_br_text("a<BR/>b") == "a\nb"
+
+    def test_multiple_brs_each_replaced(self):
+        assert _normalize_br_text("a<br/>b<br/>c") == "a\nb\nc"
+
+    def test_triple_br_replaced(self):
+        """The '<br/><br/><br/>' pattern from corrupted multi-cycle content."""
+        assert _normalize_br_text("a<br/><br/><br/>b") == "a\n\n\nb"
+
+    def test_no_br_text_unchanged(self):
+        assert _normalize_br_text("plain text") == "plain text"
+
+    def test_newline_unchanged(self):
+        """Pre-existing \\n from get_text(separator='\\n') must not be touched."""
+        assert _normalize_br_text("a\nb") == "a\nb"
+
+    def test_mixed_br_and_newline(self):
+        assert _normalize_br_text("a\nb<br/>c") == "a\nb\nc"
+
+
+# ---------------------------------------------------------------------------
+# _replace_cell_text with literal <br> text in translated_text
+# ---------------------------------------------------------------------------
+
+
+class TestBrReconstructionFromLiteralText:
+    """When translated_text contains literal '<br/>' strings (written by
+    translators or stored by translation-memory tools), _replace_cell_text
+    must treat them the same as \\n and reconstruct real <br> elements."""
+
+    def test_literal_br_self_closing_becomes_real_br(self):
+        cell = _cell("<td>before<br/>after</td>")
+        _replace_cell_text(cell, "avant<br/>après")
+        assert cell.find("br") is not None
+        assert "&lt;br" not in str(cell)
+
+    def test_literal_br_open_tag_becomes_real_br(self):
+        cell = _cell("<td>a<br/>b</td>")
+        _replace_cell_text(cell, "x<br>y")
+        assert cell.find("br") is not None
+
+    def test_literal_br_uppercase_becomes_real_br(self):
+        cell = _cell("<td>a<br/>b</td>")
+        _replace_cell_text(cell, "x<BR/>y")
+        assert cell.find("br") is not None
+
+    def test_multiple_literal_brs_produce_multiple_real_brs(self):
+        cell = _cell("<td>a<br/>b<br/>c</td>")
+        _replace_cell_text(cell, "x<br/>y<br/>z")
+        assert len(cell.find_all("br")) == 2
+        assert list(cell.strings) == ["x", "y", "z"]
+
+    def test_triple_literal_br_pattern_from_corruption(self):
+        """The '<br/><br/><br/>' pattern seen in corrupted existing translations."""
+        cell = _cell("<td>line1<br/>line2</td>")
+        _replace_cell_text(cell, "línea1<br/><br/><br/>línea2")
+        brs = cell.find_all("br")
+        assert len(brs) == 3
+        assert "&lt;br" not in str(cell)
+
+    def test_text_correct_around_literal_br(self):
+        cell = _cell("<td>text<br/>more</td>")
+        _replace_cell_text(cell, "texte<br/>suite")
+        assert list(cell.strings) == ["texte", "suite"]

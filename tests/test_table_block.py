@@ -638,3 +638,83 @@ class TestBrTagPreservation:
         assert tds[0].get_text() == "llano"
         assert tds[1].find("br") is not None
         assert tds[1].get_text(separator="\n") == "multi\nlínea"
+
+
+# ---------------------------------------------------------------------------
+# Corrupted content: cells with literal '<br/>' NavigableString text
+# ---------------------------------------------------------------------------
+
+
+class TestLiteralBrTextNormalization:
+    """Cells that went through the old (pre-0.2.7) restore cycle may have
+    literal '<br/>' stored as NavigableString content instead of real <br>
+    Tag elements.  Both extraction and restoration must normalise these."""
+
+    def _make_corrupted_cell_html(self, content: str) -> str:
+        """Build table HTML whose cell content is a plain NavigableString
+        that includes literal '<br/>' characters — simulating the output of
+        the old _replace_cell_text compound path."""
+        from bs4 import BeautifulSoup as BS, NavigableString as NS
+        soup = BS(
+            "<table><tbody><tr><td></td></tr></tbody></table>", "html.parser"
+        )
+        td = soup.find("td")
+        td.append(NS(content))
+        return str(soup)
+
+    def test_corrupted_cell_extracted_without_literal_br(self, localize_block):
+        """A cell with literal '<br/>' NavigableString content must produce a
+        segment whose text uses '\\n' — not the literal string '<br/>'."""
+        html = self._make_corrupted_cell_html("line1 <br/> line2")
+        segs = localize_block.get_translatable_segments(html)
+        assert len(segs) == 1
+        assert "<br" not in segs[0].string.data
+        assert "\n" in segs[0].string.data
+
+    def test_corrupted_cell_triple_br_extracted_correctly(self, localize_block):
+        """The '<br/><br/><br/>' pattern from multiple corruption cycles must
+        all be converted to '\\n' in the extracted segment text."""
+        html = self._make_corrupted_cell_html(
+            "- bullet1<br/><br/><br/>- bullet2"
+        )
+        segs = localize_block.get_translatable_segments(html)
+        assert "<br" not in segs[0].string.data
+
+    def test_literal_br_in_translated_text_restores_as_real_br(self, localize_block):
+        """If the stored translation string itself contains literal '<br/>'
+        (typed by a translator or output by a translation tool), restore must
+        convert it to a real <br> element — not leave it as literal text."""
+        html = "<table><tbody><tr><td>line1<br/>line2</td></tr></tbody></table>"
+        # Translator typed literal '<br/>' rather than preserving '\\n'
+        segs = [MockSegment("", "línea1<br/>línea2", 0)]
+        result = localize_block.restore_translated_segments(html, segs)
+        assert "&lt;br" not in result
+        soup = BeautifulSoup(result, "html.parser")
+        td = soup.find("td")
+        assert td.find("br") is not None
+        assert td.get_text(separator="\n") == "línea1\nlínea2"
+
+    def test_full_round_trip_corrupted_source(self, localize_block):
+        """End-to-end with a corrupted source cell: extract normalises literal
+        '<br/>' to '\\n', translator preserves '\\n', restore writes real <br>."""
+        html = self._make_corrupted_cell_html(
+            "- First bullet <br/> - Second bullet <br/> - Third bullet"
+        )
+        extracted = localize_block.get_translatable_segments(html)
+        assert len(extracted) == 1
+        seg_text = extracted[0].string.data
+        assert "<br" not in seg_text
+        # Check newlines are present as the separator
+        assert seg_text.count("\n") == 2
+
+        # Build translated segments preserving the \\n structure
+        lines = seg_text.split("\n")
+        translated_lines = [f"[{l.strip()}]" for l in lines]
+        translated_text = "\n".join(translated_lines)
+        translated = [MockSegment("", translated_text, extracted[0].order)]
+
+        result = localize_block.restore_translated_segments(html, translated)
+        soup = BeautifulSoup(result, "html.parser")
+        td = soup.find("td")
+        assert len(td.find_all("br")) == 2
+        assert "&lt;br" not in result

@@ -1,4 +1,5 @@
 import logging
+import re
 
 from wagtail_localize.segments import StringSegmentValue
 
@@ -18,26 +19,61 @@ __all__ = [
 # keeping executable code out of serialised config strings.
 _TFOOT_SETUP = "tablefooterrow"
 
+# Matches literal <br>, <br/>, <br />, <BR/> etc. appearing as plain text
+# inside a NavigableString rather than as a real HTML Tag element.  This
+# happens when a previous faulty restore wrote the translated text (which
+# contained literal "<br/>" characters typed by the translator) directly into
+# the cell as a NavigableString.
+_LITERAL_BR_RE = re.compile(r"<br\s*/?>", re.IGNORECASE)
+
+
+def _normalize_br_text(text: str) -> str:
+    """Replace any literal ``<br>`` / ``<br/>`` strings with ``\\n``.
+
+    Cells whose content was corrupted by a previous round-trip (where a
+    translator typed ``<br/>`` as literal characters rather than a real HTML
+    element) contain ``<br/>`` inside their NavigableString text.
+    ``get_text()`` faithfully returns those characters, so the extracted
+    segment contains them too.  Normalising to ``\\n`` here makes the
+    round-trip consistent regardless of whether the cell stores real ``<br>``
+    Tags or legacy literal-text ``<br/>`` strings.
+    """
+    return _LITERAL_BR_RE.sub("\n", text)
+
 
 def _replace_cell_text(cell_tag, translated_text):
     """Replace the visible text of a BeautifulSoup cell tag with *translated_text*.
 
-    Three cases:
-    - Simple cell: the tag has a single NavigableString child (``tag.string`` is
-      not None).  We call ``replace_with`` directly on that string.
-    - Multi-line compound cell: ``translated_text`` contains ``\\n`` separators,
-      produced by ``get_text(separator="\\n")`` on a cell that had ``<br>`` or
-      multiple block-level children.  We reconstruct a real ``<br>`` element for
-      each ``\\n`` so the published page renders line breaks correctly.
-    - Single-line compound cell: we clear the tag and insert the translated plain
-      text as a new NavigableString, which intentionally drops inner formatting
-      because the translation system operates on plain text.
+    Three cases are distinguished after normalising literal ``<br>`` strings
+    in ``translated_text`` to ``\\n``:
+
+    - **Simple cell, no line breaks** — ``tag.string`` is not None (single-child
+      chain) AND the normalised text contains no ``\\n``.  We call
+      ``replace_with`` on the leaf NavigableString only, preserving any wrapper
+      elements such as ``<p>`` or ``<a>`` in the chain.
+    - **Multi-line cell** — either the cell has multiple children
+      (``tag.string`` is None) OR the translated text contains ``\\n`` after
+      normalisation.  This includes "simple" cells whose NavigableString content
+      was corrupted by a previous restore cycle that wrote literal ``<br/>``
+      characters as plain text; those cells have ``tag.string is not None`` but
+      the extracted segment carries ``\\n`` markers after normalisation.  We
+      clear the tag and reconstruct one real ``<br>`` element per split point.
+    - **Single-line compound cell** — compound cell (``tag.string`` is None)
+      whose translated text has no line breaks; we clear and insert plain text.
     """
-    if cell_tag.string is not None:
+    # Normalise literal <br> text in the translation before any path decision.
+    # This handles both translators who typed '<br/>' and translation tools
+    # that serialise newlines as '<br/>' in their output.
+    normalized = _normalize_br_text(translated_text)
+
+    if cell_tag.string is not None and "\n" not in normalized:
+        # Happy path: leaf NavigableString, no line breaks — preserve wrappers.
         cell_tag.string.replace_with(translated_text)
     else:
+        # Compound cell, or simple cell with \n (corrupted NavigableString
+        # whose literal '<br/>' text was normalised to '\n' during extraction).
         cell_tag.clear()
-        lines = translated_text.split("\n")
+        lines = normalized.split("\n")
         if len(lines) > 1:
             for i, line in enumerate(lines):
                 cell_tag.append(NavigableString(line))
@@ -130,7 +166,7 @@ class TinyMCETableBlock(TinyMCEBlock):
             # must be handled explicitly before the row loop.
             caption = table.find("caption")
             if caption is not None:
-                text = caption.get_text(separator="\n").strip()
+                text = _normalize_br_text(caption.get_text(separator="\n")).strip()
                 if text and text not in duplicate_elements:
                     segments.append(StringSegmentValue("", text, order=col))
                     duplicate_elements.append(text)
@@ -141,7 +177,7 @@ class TinyMCETableBlock(TinyMCEBlock):
                 # Include both <td> (body/footer cells) and <th> (header cells).
                 cells = row.find_all(["td", "th"])
                 for elem in cells:
-                    text = elem.get_text(separator="\n").strip()
+                    text = _normalize_br_text(elem.get_text(separator="\n")).strip()
                     # Skip empty cells and cells that contain nested tables.
                     # The truthiness guard (bool(text)) ensures the first empty
                     # cell is not mistakenly added as a segment, which would
@@ -174,7 +210,7 @@ class TinyMCETableBlock(TinyMCEBlock):
                 # Restore caption before processing rows, mirroring extraction order.
                 caption = table.find("caption")
                 if caption is not None:
-                    text = caption.get_text(separator="\n").strip()
+                    text = _normalize_br_text(caption.get_text(separator="\n")).strip()
                     if text:
                         try:
                             translated = sorted_segment[cell].string.data
@@ -197,7 +233,7 @@ class TinyMCETableBlock(TinyMCEBlock):
                     # Mirror the same cell selector used in get_translatable_segments.
                     cells = row.find_all(["td", "th"])
                     for ele in cells:
-                        text = ele.get_text(separator="\n").strip()
+                        text = _normalize_br_text(ele.get_text(separator="\n")).strip()
                         if not text or ele.find("table"):
                             continue
                         try:
