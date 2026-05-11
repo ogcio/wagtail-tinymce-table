@@ -16,14 +16,28 @@ A set of [Wagtail](https://wagtail.org/) StreamField blocks that embed a [TinyMC
 
 ---
 
-## Requirements
+## Compatibility
+
+### Version matrix
+
+| wagtail-tinymce | Wagtail | Django | Python | wagtail-localize |
+|---|---|---|---|---|
+| **0.3.x** (current) | 4.0 – 7.x | 4.2 LTS, 5.2 LTS, 6.0 | 3.9 – 3.14 ¹ | ≥ 1.5 ² |
+| 0.2.x | 4.0 – 6.x | 4.2, 5.0, 5.1 | 3.9 – 3.13 | ≥ 1.5 |
+| 0.1.x | 4.0 – 5.x | 4.2, 5.0 | 3.9 – 3.12 | ≥ 1.5 |
+
+¹ Wagtail 7 itself requires Python ≥ 3.10.  
+² When installed alongside Wagtail 7, pip automatically resolves `wagtail-localize ≥ 1.12`
+  (the first release that supports Wagtail 7).
+
+### Package requirements
 
 | Package | Minimum version |
 |---|---|
 | Python | 3.9 |
 | Django | 4.2 |
 | Wagtail | 4.0 |
-| django-tinymce | 5.0 |
+| django-tinymce | 5.0 (bundles TinyMCE 7) |
 | bleach | 6.0 |
 | beautifulsoup4 | 4.12 |
 | lxml | 4.9 |
@@ -42,19 +56,25 @@ A set of [Wagtail](https://wagtail.org/) StreamField blocks that embed a [TinyMC
 pip install wagtail-tinymce
 ```
 
-### From Git (`master` branch — TinyMCE 7, django-tinymce ≥ 5.0)
+### From Git — latest (0.3.x, Wagtail 4 – 7, TinyMCE 7)
 
 ```bash
 pip install git+https://github.com/ogcio/wagtail-tinymce-table.git@master
 ```
 
+Pin to a specific release tag for reproducible installs:
+
+```bash
+pip install git+https://github.com/ogcio/wagtail-tinymce-table.git@v0.3.0
+```
+
 In a `requirements.txt` file (PEP 508):
 
 ```text
-wagtail-tinymce @ git+https://github.com/ogcio/wagtail-tinymce-table.git@master
+wagtail-tinymce @ git+https://github.com/ogcio/wagtail-tinymce-table.git@v0.3.0
 ```
 
-### Legacy version (TinyMCE 6, django-tinymce ≥ 3.5)
+### Legacy version (TinyMCE 6, Wagtail 4 – 5, django-tinymce ≥ 3.5)
 
 If your project requires TinyMCE 6, install the `v0.1.0` tag instead:
 
