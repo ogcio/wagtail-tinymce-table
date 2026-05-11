@@ -243,5 +243,6 @@ class TestWagtailTinyMCEAdapter:
 
     def test_media_includes_adapter_js(self):
         adapter = WagtailTinyMCEAdapter()
-        js_files = adapter.media._js
-        assert any("tinymce-adapter.js" in f for f in js_files)
+        # Use the public str() rendering rather than the private _js list so
+        # this test is compatible with all supported Wagtail versions.
+        assert "tinymce-adapter.js" in str(adapter.media)

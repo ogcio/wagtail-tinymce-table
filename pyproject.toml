@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wagtail-tinymce"
-version = "0.2.8"
+version = "0.3.0"
 description = "TinyMCE-powered StreamField blocks for Wagtail, including a table block with Excel paste support."
 readme = "README.md"
 license = { text = "MIT" }
@@ -20,6 +20,9 @@ dependencies = [
     "bleach[css]>=6.0,<7",
     "beautifulsoup4>=4.12",
     "lxml>=4.9",
+    # 1.5 is the minimum that introduced the segment protocol we depend on.
+    # Wagtail 7.x requires wagtail-localize >=1.12 (first release supporting
+    # Wagtail 7); pip resolves the correct version automatically.
     "wagtail-localize>=1.5",
 ]
 
