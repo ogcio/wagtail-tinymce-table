@@ -33,6 +33,13 @@ dev = [
     "pip-audit",
 ]
 
+[tool.poetry]
+name = "wagtail-tinymce"
+version = "0.3.0"
+description = "TinyMCE-powered StreamField blocks for Wagtail, including a table block with Excel paste support."
+authors = []
+packages = [{include = "wagtailtinymce"}]
+
 [project.urls]
 Repository = "https://github.com/your-org/wagtail-tinymce"
 
