@@ -34,7 +34,26 @@ dev = [
 ]
 
 [project.urls]
-Repository = "https://github.com/your-org/wagtail-tinymce"
+Repository = "https://github.com/ogcio/wagtail-tinymce-table"
+
+# ---------------------------------------------------------------------------
+# [tool.poetry] — identity block for Poetry compatibility
+#
+# Poetry < 1.5 does not read the standard [project] (PEP 621) section when
+# resolving git dependencies; it only looks for [tool.poetry] to get the
+# package name.  Without this block those versions raise:
+#   "Unable to create package with no name"
+#
+# NOTE: the build backend is still setuptools (see [build-system] above).
+# [tool.poetry] here is read-only metadata for Poetry's resolver — Poetry
+# does NOT use it to build or install the package.  The authoritative
+# package discovery config remains [tool.setuptools] below.
+# ---------------------------------------------------------------------------
+[tool.poetry]
+name = "wagtail-tinymce"
+version = "0.3.0"
+description = "TinyMCE-powered StreamField blocks for Wagtail, including a table block with Excel paste support."
+authors = []
 
 [tool.setuptools]
 packages = ["wagtailtinymce", "wagtailtinymce.core"]
