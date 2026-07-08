@@ -99,7 +99,7 @@ jobs:
 
     environment:
       name: pypi
-      url: https://pypi.org/p/wagtail-tinymce
+      url: https://pypi.org/p/wagtail-tinymce-table
 
     steps:
       - name: Download distribution artifacts

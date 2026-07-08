@@ -1,11 +1,17 @@
 # Changelog
 
-All notable changes to `wagtail-tinymce` are documented here.
+All notable changes to `wagtail-tinymce-table` are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
 ## [Unreleased]
+
+### Changed
+
+- **PyPI distribution name** set to `wagtail-tinymce-table`. The name `wagtail-tinymce`
+  is unavailable on PyPI (too similar to the unrelated `wagtailtinymce` package). The
+  Python import path remains `wagtailtinymce`.
 
 ---
 
