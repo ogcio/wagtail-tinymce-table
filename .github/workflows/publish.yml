@@ -5,42 +5,66 @@ on:
     types: [published]
 
 jobs:
-  # ── 1. Run the full test matrix before publishing ────────────────────────────
+  # ── 0. Detect package version and build a matching test matrix ───────────────
+  # Wagtail 7 support was added in 0.3.0.  When publishing older releases
+  # (0.2.x) the release tag is checked out here, so we skip Wagtail 7 rows.
+  detect:
+    name: Detect package version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.pkg.outputs.version }}
+      matrix: ${{ steps.pkg.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: pkg
+        name: Read version and build test matrix
+        run: |
+          python3 <<'PY'
+          import json
+          import os
+          import tomllib
+
+          with open("pyproject.toml", "rb") as f:
+              version = tomllib.load(f)["project"]["version"]
+
+          major, minor, _patch = (int(x) for x in version.split("."))
+          supports_wagtail7 = major > 0 or (major == 0 and minor >= 3)
+
+          matrix = [
+              {"python": "3.9", "wagtail": "wagtail>=5.2,<6", "django": "django>=4.2,<5"},
+              {"python": "3.11", "wagtail": "wagtail>=5.2,<6", "django": "django>=4.2,<5"},
+              {"python": "3.11", "wagtail": "wagtail>=6.3,<7", "django": "django>=4.2,<5"},
+              {"python": "3.12", "wagtail": "wagtail>=6.3,<7", "django": "django>=5.2,<6"},
+          ]
+          if supports_wagtail7:
+              matrix.extend([
+                  {"python": "3.10", "wagtail": "wagtail>=7.3,<8", "django": "django>=4.2,<5"},
+                  {"python": "3.12", "wagtail": "wagtail>=7.3,<8", "django": "django>=5.2,<6"},
+                  {"python": "3.13", "wagtail": "wagtail>=7.3,<8", "django": "django>=5.2,<6"},
+              ])
+
+          github_output = os.environ["GITHUB_OUTPUT"]
+          with open(github_output, "a", encoding="utf-8") as fh:
+              fh.write(f"version={version}\n")
+              fh.write("matrix<<MATRIX_EOF\n")
+              fh.write(json.dumps({"include": matrix}))
+              fh.write("\nMATRIX_EOF\n")
+
+          print(f"Package version: {version}")
+          print(f"Wagtail 7 matrix rows: {supports_wagtail7}")
+          print(f"Test combinations: {len(matrix)}")
+          PY
+
+  # ── 1. Run the version-appropriate test matrix before publishing ───────────
   test:
     name: "Python ${{ matrix.python }} · ${{ matrix.wagtail }} · ${{ matrix.django }}"
     runs-on: ubuntu-latest
+    needs: detect
 
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - python: "3.9"
-            wagtail: "wagtail>=5.2,<6"
-            django: "django>=4.2,<5"
-
-          - python: "3.11"
-            wagtail: "wagtail>=5.2,<6"
-            django: "django>=4.2,<5"
-
-          - python: "3.11"
-            wagtail: "wagtail>=6.3,<7"
-            django: "django>=4.2,<5"
-
-          - python: "3.12"
-            wagtail: "wagtail>=6.3,<7"
-            django: "django>=5.2,<6"
-
-          - python: "3.10"
-            wagtail: "wagtail>=7.3,<8"
-            django: "django>=4.2,<5"
-
-          - python: "3.12"
-            wagtail: "wagtail>=7.3,<8"
-            django: "django>=5.2,<6"
-
-          - python: "3.13"
-            wagtail: "wagtail>=7.3,<8"
-            django: "django>=5.2,<6"
+      matrix: ${{ fromJSON(needs.detect.outputs.matrix) }}
 
     steps:
       - uses: actions/checkout@v4
@@ -65,7 +89,7 @@ jobs:
   build:
     name: Build distribution
     runs-on: ubuntu-latest
-    needs: test
+    needs: [detect, test]
 
     steps:
       - uses: actions/checkout@v4
