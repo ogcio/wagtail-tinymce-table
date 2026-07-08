@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wagtail-tinymce-table"
+version = "0.2.1"
+description = "TinyMCE-powered StreamField blocks for Wagtail, including a table block with Excel paste support."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+dependencies = [
+    "wagtail>=4.0",
+    "django-tinymce>=5.0",
+    "bleach>=6.0",
+    "beautifulsoup4>=4.12",
+    "lxml>=4.9",
+    "wagtail-localize>=1.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-django",
+]
+
+[project.urls]
+Repository = "https://github.com/ogcio/wagtail-tinymce-table"
+
+[tool.setuptools]
+packages = ["wagtailtinymce", "wagtailtinymce.core"]
+
+[tool.setuptools.package-dir]
+"wagtailtinymce" = "."
+"wagtailtinymce.core" = "core"
+
+[tool.setuptools.package-data]
+"wagtailtinymce" = ["static/**/*"]
+
+[tool.pytest.ini_options]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+testpaths = ["tests"]
+# pytest-django requires DJANGO_SETTINGS_MODULE or inline config;
+# Django is configured programmatically in tests/conftest.py instead.
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
