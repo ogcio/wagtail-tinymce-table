@@ -54,18 +54,12 @@ stages:
     displayName: Test
     dependsOn: Detect
     jobs:
+      # Wagtail 5.2 requires beautifulsoup4<4.12, but this package requires
+      # beautifulsoup4>=4.12 — those ranges conflict, so Wagtail 5 is omitted.
       - job: TestCore
-        displayName: Test (Wagtail 5–6)
+        displayName: Test (Wagtail 6)
         strategy:
           matrix:
-            py39_w5:
-              pythonVersion: "3.9"
-              wagtailSpec: "wagtail>=5.2,<6"
-              djangoSpec: "django>=4.2,<5"
-            py311_w5:
-              pythonVersion: "3.11"
-              wagtailSpec: "wagtail>=5.2,<6"
-              djangoSpec: "django>=4.2,<5"
             py311_w6:
               pythonVersion: "3.11"
               wagtailSpec: "wagtail>=6.3,<7"
