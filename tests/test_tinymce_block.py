@@ -10,7 +10,7 @@ Tests for TinyMCEBlock (blocks.py) and WagtailTinyMCE widget (widgets.py).
 import pytest
 from django.utils.safestring import SafeData
 
-from wagtailtinymce.blocks import TinyMCEBlock
+from wagtailtinymce.blocks import SanitizationDisabledWarning, TinyMCEBlock
 from wagtailtinymce.core.table_block import TinyMCETableBlock
 from wagtailtinymce.widgets import WagtailTinyMCE, WagtailTinyMCEAdapter
 
@@ -105,6 +105,58 @@ class TestSanitize:
         result = table_block.sanitize(html)
         assert "javascript:" not in result
 
+    def test_target_blank_gets_noopener(self, table_block):
+        html = (
+            '<table><tbody><tr><td>'
+            '<a href="https://example.com" target="_blank">External</a>'
+            '</td></tr></tbody></table>'
+        )
+        result = table_block.sanitize(html)
+        assert 'rel="noopener noreferrer"' in result
+
+    def test_non_blank_target_unchanged(self, table_block):
+        # target="_self" must not have rel injected
+        html = (
+            '<table><tbody><tr><td>'
+            '<a href="https://example.com" target="_self">Internal</a>'
+            '</td></tr></tbody></table>'
+        )
+        result = table_block.sanitize(html)
+        assert "noopener" not in result
+
+    def test_existing_rel_overwritten_for_blank_target(self, table_block):
+        # An attacker-supplied rel="opener" must be replaced, not appended
+        html = (
+            '<table><tbody><tr><td>'
+            '<a href="https://example.com" target="_blank" rel="opener">Bad</a>'
+            '</td></tr></tbody></table>'
+        )
+        result = table_block.sanitize(html)
+        assert "opener" not in result or "noopener noreferrer" in result
+        assert 'rel="noopener noreferrer"' in result
+
+    def test_preserves_allowed_inline_styles(self, table_block):
+        # width and border-collapse are in TinyMCETableBlock.allowed_styles
+        html = '<table style="width:100%;border-collapse:collapse"><tbody><tr><td>X</td></tr></tbody></table>'
+        result = table_block.sanitize(html)
+        assert "width" in result
+        assert "border-collapse" in result
+
+    def test_strips_disallowed_inline_styles(self, table_block):
+        # color and background-color are NOT in allowed_styles — must be stripped
+        html = '<table style="color:red;background-color:blue"><tbody><tr><td>X</td></tr></tbody></table>'
+        result = table_block.sanitize(html)
+        assert "color" not in result
+        assert "background-color" not in result
+
+    def test_no_css_sanitizer_warning_when_allowed_styles_set(self, table_block):
+        import warnings as _warnings
+        html = '<table style="width:50%"><tbody><tr><td>X</td></tr></tbody></table>'
+        with _warnings.catch_warnings():
+            _warnings.simplefilter("error")
+            # Should not raise NoCssSanitizerWarning when allowed_styles is set
+            table_block.sanitize(html)
+
 
 # ---------------------------------------------------------------------------
 # TinyMCEBlock.value_from_form()
@@ -127,11 +179,13 @@ class TestValueFromForm:
         result = table_block.value_from_form(html)
         assert isinstance(result, SafeData)
 
-    def test_skips_sanitize_when_disabled(self):
-        block = TinyMCETableBlock(sanitize_input=False)
+    def test_skips_sanitize_when_disabled_and_emits_warning(self):
+        # sanitize_input=False is intentionally dangerous — the block must
+        # emit SanitizationDisabledWarning so misuse is never silent.
+        with pytest.warns(SanitizationDisabledWarning, match="sanitize_input=False"):
+            block = TinyMCETableBlock(sanitize_input=False)
         raw = "<table><tbody><tr><td><script>x</script></td></tr></tbody></table>"
         result = block.value_from_form(raw)
-        # sanitize_input=False → raw HTML is passed through unchanged
         assert "<script>" in result
 
     def test_empty_string_returns_safe_empty(self, table_block):

@@ -56,7 +56,7 @@ wagtail-tinymce @ git+https://github.com/ogcio/wagtail-tinymce-table.git@master
 
 ### Legacy version (TinyMCE 6, django-tinymce ≥ 3.5)
 
-If your project requires  (TinyMCE 6), install the  tag instead:
+If your project requires TinyMCE 6, install the `v0.1.0` tag instead:
 
 ```bash
 pip install git+https://github.com/ogcio/wagtail-tinymce-table.git@v0.1.0
@@ -300,6 +300,85 @@ class MyTableBlock(TinyMCETableBlock):
     allowed_tags = TinyMCETableBlock.allowed_tags + ["figure", "figcaption"]
 ```
 
+### Applying your site's table styles to new tables
+
+There are two independent concerns here:
+
+1. **Frontend rendering** — making the published page apply your site's CSS to new tables.
+2. **Editor preview** — making the TinyMCE iframe look the same as the frontend.
+
+#### 1. Frontend rendering
+
+`TinyMCETableBlock` stores a plain `<table>` element. All tables rendered inside
+`<section class="block-table">` can be targeted in your site's stylesheet without
+needing to add any class to the table itself:
+
+```css
+/* targets every TinyMCE table block on the published page */
+section.block-table table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+section.block-table table td,
+section.block-table table th {
+    border: 1px solid #dbdbdb;
+    padding: 0.5em 0.75em;
+    vertical-align: top;
+}
+```
+
+This approach is CSS-framework-agnostic and works regardless of what class (if any)
+the table carries.
+
+**If your framework uses a CSS class hook** (e.g. Bulma's `.table.is-bordered`),
+stamp every new table with that class via `table_default_attributes`:
+
+```python
+class MyTableBlock(TinyMCETableBlock):
+    custom_mce_config = {
+        **TinyMCETableBlock.custom_mce_config,
+        # Bulma example — adjust to your framework's class names
+        "table_default_attributes": {"class": "table is-bordered"},
+    }
+```
+
+> **Note on CSS specificity:** a class selector (`.table td`, specificity 0,1,1)
+> overrides an element selector (`table td`, specificity 0,0,2). If your site has
+> a generic `table td` rule *and* a `.table td` rule, the class rule wins for tables
+> that carry the class. Make sure the class-scoped rules include everything you need.
+
+#### 2. Editor preview
+
+TinyMCE renders inside an **iframe** isolated from your host stylesheet. Use
+`content_css` to load your compiled stylesheet into the iframe so the editing
+experience matches the frontend:
+
+```python
+class MyTableBlock(TinyMCETableBlock):
+    custom_mce_config = {
+        **TinyMCETableBlock.custom_mce_config,
+        # Path served by Django's staticfiles — adjust to match your project.
+        "content_css": "/static/css/your-app.css",
+    }
+```
+
+If you only need a small number of rules you can inline them with `content_style`
+instead — no extra HTTP request:
+
+```python
+class MyTableBlock(TinyMCETableBlock):
+    custom_mce_config = {
+        **TinyMCETableBlock.custom_mce_config,
+        "content_style": (
+            "table { border-collapse: collapse; width: 100%; }"
+            "td, th { border: 1px solid #dbdbdb; padding: 0.5em 0.75em; }"
+        ),
+    }
+```
+
+> **Tip:** `content_css` and `content_style` can be combined — TinyMCE applies both.
+
 ### Disabling sanitization
 
 Set `sanitize_input=False` if you need to allow arbitrary HTML (only do this when the editor is trusted):
@@ -380,29 +459,7 @@ The test suite has **75 tests** covering:
 
 ## Changelog
 
-### 0.2.1
-
-#### Bug fixes
-- **Header rows now produce `<th>` elements.** The default TinyMCE `table_header_type` value `"section"` moved rows into `<thead>` but kept `<td>` cells. Setting it to `"sectionCells"` correctly converts cells to `<th>` as well.
-- **Table `<caption>` text is now included in translatable segments.** The caption is extracted before row cells and restored in the same position, so it appears correctly in the Wagtail Localize translation UI.
-
-### 0.2.0
-
-#### Breaking changes
-- **Requires `django-tinymce >= 5.0`** (previously 3.5). This bundles **TinyMCE 7.8** instead of TinyMCE 6.x. If you cannot upgrade `django-tinymce`, pin to the `v0.1.0` git tag.
-- **`wagtail-localize >= 1.5` is now a required dependency** (previously optional).
-
-#### Packaging
-- Fixed build backend from `setuptools.backends.legacy:build` to `setuptools.build_meta` for compatibility with older setuptools versions.
-- Fixed `package-dir` mapping so `pip install git+…` correctly installs the `wagtailtinymce` module (previously the package was silently installed empty).
-
-### 0.1.0
-
-- Initial release.
-- `TinyMCEBlock` and `TinyMCETableBlock` StreamField blocks.
-- Excel / Google Sheets paste support via TinyMCE's clipboard plugin.
-- Custom *Footer Row* toolbar button for `<tfoot>` support.
-- `wagtail-localize` segment extraction and restoration, with fixes for empty cells, merged cells with rich content, and `<th>` cells.
+See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
 ---
 
