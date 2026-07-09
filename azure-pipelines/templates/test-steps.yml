@@ -1,0 +1,26 @@
+parameters:
+  - name: pythonVersion
+    type: string
+  - name: wagtailSpec
+    type: string
+  - name: djangoSpec
+    type: string
+
+steps:
+  - checkout: self
+    fetchDepth: 1
+
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: ${{ parameters.pythonVersion }}
+    displayName: Use Python ${{ parameters.pythonVersion }}
+
+  - bash: |
+      set -euo pipefail
+      python -m pip install --upgrade pip
+      pip install \
+        "${{ parameters.wagtailSpec }}" \
+        "${{ parameters.djangoSpec }}" \
+        -e ".[dev]"
+      pytest -v
+    displayName: Install and test

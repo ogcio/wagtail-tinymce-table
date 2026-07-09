@@ -1,0 +1,163 @@
+# Azure DevOps pipeline — test, build, and publish wagtail-tinymce-table to PyPI.
+#
+# Manual runs only (no CI/tag triggers). In Azure DevOps: Run pipeline →
+# select the branch or tag to publish (e.g. pypi-v0.2.1).
+# Requires a secret pipeline variable: PYPI_API_TOKEN
+
+trigger: none
+
+pr: none
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  PYPI_REPOSITORY_URL: https://upload.pypi.org/legacy/
+
+stages:
+  # ── 0. Read package version from pyproject.toml ──────────────────────────────
+  - stage: Detect
+    displayName: Detect version
+    jobs:
+      - job: DetectVersion
+        displayName: Detect package version
+        steps:
+          - checkout: self
+            fetchDepth: 1
+
+          - bash: |
+              set -euo pipefail
+              VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+              NAME=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['name'])")
+              MAJOR=${VERSION%%.*}
+              REST=${VERSION#*.}
+              MINOR=${REST%%.*}
+
+              if [ "$MAJOR" -gt 0 ] || { [ "$MAJOR" -eq 0 ] && [ "$MINOR" -ge 3 ]; }; then
+                SUPPORTS_W7=true
+              else
+                SUPPORTS_W7=false
+              fi
+
+              echo "Package: $NAME"
+              echo "Version: $VERSION"
+              echo "Wagtail 7 tests: $SUPPORTS_W7"
+
+              echo "##vso[task.setvariable variable=packageName;isOutput=true]$NAME"
+              echo "##vso[task.setvariable variable=packageVersion;isOutput=true]$VERSION"
+              echo "##vso[task.setvariable variable=supportsWagtail7;isOutput=true]$SUPPORTS_W7"
+            name: detect
+            displayName: Read pyproject.toml
+
+  # ── 1. Version-appropriate test matrix ───────────────────────────────────────
+  - stage: Test
+    displayName: Test
+    dependsOn: Detect
+    jobs:
+      - job: TestCore
+        displayName: Test (Wagtail 5–6)
+        strategy:
+          failFast: false
+          matrix:
+            py39_w5:
+              pythonVersion: "3.9"
+              wagtailSpec: "wagtail>=5.2,<6"
+              djangoSpec: "django>=4.2,<5"
+            py311_w5:
+              pythonVersion: "3.11"
+              wagtailSpec: "wagtail>=5.2,<6"
+              djangoSpec: "django>=4.2,<5"
+            py311_w6:
+              pythonVersion: "3.11"
+              wagtailSpec: "wagtail>=6.3,<7"
+              djangoSpec: "django>=4.2,<5"
+            py312_w6:
+              pythonVersion: "3.12"
+              wagtailSpec: "wagtail>=6.3,<7"
+              djangoSpec: "django>=5.2,<6"
+        steps:
+          - template: azure-pipelines/templates/test-steps.yml
+            parameters:
+              pythonVersion: $(pythonVersion)
+              wagtailSpec: $(wagtailSpec)
+              djangoSpec: $(djangoSpec)
+
+      - job: TestWagtail7
+        displayName: Test (Wagtail 7)
+        condition: eq(stageDependencies.Detect.DetectVersion.outputs['detect.supportsWagtail7'], 'true')
+        strategy:
+          failFast: false
+          matrix:
+            py310_w7:
+              pythonVersion: "3.10"
+              wagtailSpec: "wagtail>=7.3,<8"
+              djangoSpec: "django>=4.2,<5"
+            py312_w7:
+              pythonVersion: "3.12"
+              wagtailSpec: "wagtail>=7.3,<8"
+              djangoSpec: "django>=5.2,<6"
+            py313_w7:
+              pythonVersion: "3.13"
+              wagtailSpec: "wagtail>=7.3,<8"
+              djangoSpec: "django>=5.2,<6"
+        steps:
+          - template: azure-pipelines/templates/test-steps.yml
+            parameters:
+              pythonVersion: $(pythonVersion)
+              wagtailSpec: $(wagtailSpec)
+              djangoSpec: $(djangoSpec)
+
+  # ── 2. Build sdist + wheel ───────────────────────────────────────────────────
+  - stage: Build
+    displayName: Build
+    dependsOn: Test
+    jobs:
+      - job: BuildPackage
+        displayName: Build distribution
+        steps:
+          - checkout: self
+            fetchDepth: 1
+
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: "3.12"
+            displayName: Use Python 3.12
+
+          - bash: |
+              set -euo pipefail
+              python -m pip install --upgrade pip build
+              python -m build
+              ls -la dist/
+            displayName: Build sdist and wheel
+
+          - publish: $(System.DefaultWorkingDirectory)/dist
+            artifact: dist
+            displayName: Publish dist artifact
+
+  # ── 3. Upload to PyPI ────────────────────────────────────────────────────────
+  - stage: Publish
+    displayName: Publish to PyPI
+    dependsOn: Build
+    jobs:
+      - job: PublishPyPI
+        displayName: Upload to PyPI
+        steps:
+          - download: current
+            artifact: dist
+            displayName: Download dist artifact
+
+          - bash: |
+              set -euo pipefail
+              if [ -z "${PYPI_API_TOKEN:-}" ]; then
+                echo "ERROR: PYPI_API_TOKEN is not set."
+                echo "Add it as a secret pipeline variable in Azure DevOps."
+                exit 1
+              fi
+              python -m pip install --upgrade pip twine
+              python -m twine upload "$(Pipeline.Workspace)/dist/"* \
+                --repository-url "$(PYPI_REPOSITORY_URL)" \
+                --username __token__ \
+                --password "$PYPI_API_TOKEN"
+            displayName: Upload to PyPI with twine
+            env:
+              PYPI_API_TOKEN: $(PYPI_API_TOKEN)
