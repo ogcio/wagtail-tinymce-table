@@ -57,7 +57,6 @@ stages:
       - job: TestCore
         displayName: Test (Wagtail 5–6)
         strategy:
-          failFast: false
           matrix:
             py39_w5:
               pythonVersion: "3.9"
@@ -86,7 +85,6 @@ stages:
         displayName: Test (Wagtail 7)
         condition: eq(stageDependencies.Detect.DetectVersion.outputs['detect.supportsWagtail7'], 'true')
         strategy:
-          failFast: false
           matrix:
             py310_w7:
               pythonVersion: "3.10"
