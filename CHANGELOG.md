@@ -1,11 +1,60 @@
 # Changelog
 
-All notable changes to `wagtail-tinymce` are documented here.
+All notable changes to `wagtail-tinymce-table` are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
 ## [Unreleased]
+
+### Changed
+
+- **PyPI distribution name** set to `wagtail-tinymce-table`. The name `wagtail-tinymce`
+  is unavailable on PyPI (too similar to the unrelated `wagtailtinymce` package). The
+  Python import path remains `wagtailtinymce`.
+
+---
+
+## [0.3.0] — 2026-05-11
+
+### Added
+
+- **Wagtail 7.x compatibility** (`widgets.py`)
+
+  `wagtail.utils.widgets.WidgetWithScript` was removed in Wagtail 7.  The
+  `WagtailTinyMCE` widget no longer inherits from it; on Wagtail < 7 the class
+  is still picked up via a guarded import so the widget continues to work on all
+  supported Wagtail versions (4.x – 7.x).
+
+- **Updated `WidgetAdapter` import path** (`widgets.py`)
+
+  `WidgetAdapter` was moved from `wagtail.widget_adapters` (deprecated, emits
+  `RemovedInWagtail80Warning` on Wagtail 7) to
+  `wagtail.admin.telepath.widgets`.  The import now prefers the new location and
+  falls back to the old one for Wagtail < 7.
+
+- **`WagtailTinyMCEAdapter.media` rewritten as `@cached_property`** (`widgets.py`)
+
+  The previous inner `class Media` convention worked with Wagtail's old
+  `WidgetAdapter` but is not honoured by Wagtail 7's `cached_property`-based
+  adapter.  Replaced with an explicit `@cached_property media` that merges the
+  parent Telepath JS with the adapter's own `tinymce-adapter.js`.
+
+### Compatibility
+
+| Component | Supported versions |
+|---|---|
+| **Python** | 3.9 – 3.14 *(Wagtail 7 requires ≥ 3.10)* |
+| **Django** | 4.2 LTS, 5.2 LTS, 6.0 |
+| **Wagtail** | 4.0 – 7.x |
+| **wagtail-localize** | ≥ 1.5 *(Wagtail 7 auto-resolves ≥ 1.12)* |
+| **django-tinymce** | ≥ 5.0 (TinyMCE 7) |
+
+### CI
+
+- Added GitHub Actions workflow (`.github/workflows/ci.yml`) that runs the full
+  test suite on every push and pull request across the supported Python ×
+  Wagtail matrix.
 
 ---
 

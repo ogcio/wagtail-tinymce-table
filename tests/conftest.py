@@ -24,8 +24,15 @@ def pytest_configure(config):
             INSTALLED_APPS=[
                 "django.contrib.contenttypes",
                 "django.contrib.auth",
-                "tinymce",
+                # django.contrib.staticfiles is required so that
+                # staticfiles_storage.url() (called by Wagtail 7's
+                # WidgetAdapter.media via versioned_static) resolves correctly.
+                "django.contrib.staticfiles",
                 "wagtail",
+                # wagtail.admin must be present for wagtail.admin.telepath to
+                # initialise its app registry entry (Wagtail 7+).
+                "wagtail.admin",
+                "tinymce",
                 "wagtailtinymce",
             ],
             DATABASES={
@@ -38,5 +45,6 @@ def pytest_configure(config):
             DEFAULT_AUTO_FIELD="django.db.models.BigAutoField",
             USE_TZ=True,
             STATIC_URL="/static/",
+            STATICFILES_STORAGE="django.contrib.staticfiles.storage.StaticFilesStorage",
             SECRET_KEY="test-secret-key-not-for-production",
         )
