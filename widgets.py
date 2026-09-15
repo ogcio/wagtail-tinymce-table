@@ -24,7 +24,10 @@ try:
 except ImportError:
     from wagtail.widget_adapters import WidgetAdapter  # noqa: F401  (Wagtail <7)
 
-from wagtail.telepath import register
+try:
+    from wagtail.admin.telepath import register
+except ImportError:
+    from wagtail.telepath import register  # noqa: F401  (Wagtail <7)
 
 
 # ---------------------------------------------------------------------------
