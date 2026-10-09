@@ -5,9 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [Unreleased]
+## [0.4.0] — 2026-10-09
 
 ### Changed
+
+- **Remove pyproject.toml deprecation** and set `Poetry` minimum version to `2.2.1`.
 
 - **PyPI distribution name** set to `wagtail-tinymce-table`. The name `wagtail-tinymce`
   is unavailable on PyPI (too similar to the unrelated `wagtailtinymce` package). The
