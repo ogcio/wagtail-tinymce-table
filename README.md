@@ -22,7 +22,8 @@ A set of [Wagtail](https://wagtail.org/) StreamField blocks that embed a [TinyMC
 
 | wagtail-tinymce-table | Wagtail | Django | Python | wagtail-localize |
 |---|---|---|---|---|
-| **0.3.x** (current) | 4.0 – 7.x | 4.2 LTS, 5.2 LTS, 6.0 | 3.9 – 3.14 ¹ | ≥ 1.5 ² |
+| **0.4.x** (current) | 4.0 – 8.x | 4.2 LTS, 5.2 LTS, 6.0 | 3.9 – 3.14 ¹ | ≥ 1.5 ² |
+| 0.3.x | 4.0 – 7.x | 4.2 LTS, 5.2 LTS, 6.0 | 3.9 – 3.14 ¹ | ≥ 1.5 ² |
 | 0.2.x | 4.0 – 6.x | 4.2, 5.0, 5.1 | 3.9 – 3.13 | ≥ 1.5 |
 | 0.1.x | 4.0 – 5.x | 4.2, 5.0 | 3.9 – 3.12 | ≥ 1.5 |
 

@@ -9,6 +9,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Use the module path wagtail.admin.telepath** to be compatible with Wagtail 8.
+
 - **Remove pyproject.toml deprecation** and set `Poetry` minimum version to `2.2.1`.
 
 - **PyPI distribution name** set to `wagtail-tinymce-table`. The name `wagtail-tinymce`
