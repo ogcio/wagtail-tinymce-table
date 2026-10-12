@@ -37,7 +37,7 @@ Repository = "https://github.com/ogcio/wagtail-tinymce-table"
 requires-poetry = '>=2.2.1'
 
 [tool.setuptools]
-packages = ["wagtailtinymce", "wagtailtinymce.core"]
+packages = ["wagtailtinymce", "wagtailtinymce.core", "wagtailtinymce.static.wagtailtinymce.js"]
 
 [tool.setuptools.package-dir]
 "wagtailtinymce" = "."

@@ -39,13 +39,21 @@ stages:
                 SUPPORTS_W7=false
               fi
 
+              if [ "$MAJOR" -gt 0 ] || { [ "$MAJOR" -eq 0 ] && [ "$MINOR" -ge 4 ]; }; then
+                SUPPORTS_W8=true
+              else
+                SUPPORTS_W8=false
+              fi
+
               echo "Package: $NAME"
               echo "Version: $VERSION"
               echo "Wagtail 7 tests: $SUPPORTS_W7"
+              echo "Wagtail 8 tests: $SUPPORTS_W8"
 
               echo "##vso[task.setvariable variable=packageName;isOutput=true]$NAME"
               echo "##vso[task.setvariable variable=packageVersion;isOutput=true]$VERSION"
               echo "##vso[task.setvariable variable=supportsWagtail7;isOutput=true]$SUPPORTS_W7"
+              echo "##vso[task.setvariable variable=supportsWagtail8;isOutput=true]$SUPPORTS_W8"
             name: detect
             displayName: Read pyproject.toml
 
@@ -99,6 +107,30 @@ stages:
               wagtailSpec: $(wagtailSpec)
               djangoSpec: $(djangoSpec)
 
+      - job: TestWagtail8
+        displayName: Test (Wagtail 8)
+        condition: eq(stageDependencies.Detect.DetectVersion.outputs['detect.supportsWagtail8'], 'true')
+        strategy:
+          matrix:
+            py312_w8:
+              pythonVersion: "3.12"
+              wagtailSpec: "wagtail>=8"
+              djangoSpec: "django>=5.2,<6"
+            py313_w8:
+              pythonVersion: "3.13"
+              wagtailSpec: "wagtail>=8"
+              djangoSpec: "django>=6.0,<6.1"
+            py314_w8:
+              pythonVersion: "3.14"
+              wagtailSpec: "wagtail>=8"
+              djangoSpec: "django>=6.1"
+        steps:
+          - template: azure-pipelines/templates/test-steps.yml
+            parameters:
+              pythonVersion: $(pythonVersion)
+              wagtailSpec: $(wagtailSpec)
+              djangoSpec: $(djangoSpec)
+
   # ── 2. Build sdist + wheel ───────────────────────────────────────────────────
   - stage: Build
     displayName: Build
@@ -112,8 +144,8 @@ stages:
 
           - task: UsePythonVersion@0
             inputs:
-              versionSpec: "3.12"
-            displayName: Use Python 3.12
+              versionSpec: "3.14"
+            displayName: Use Python 3.14
 
           - bash: |
               set -euo pipefail
