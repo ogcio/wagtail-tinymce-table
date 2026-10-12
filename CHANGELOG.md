@@ -7,11 +7,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Changed
+---
 
-- **PyPI distribution name** set to `wagtail-tinymce-table`. The name `wagtail-tinymce`
-  is unavailable on PyPI (too similar to the unrelated `wagtailtinymce` package). The
-  Python import path remains `wagtailtinymce`.
+## [0.4.0] — 2026-10-12
+
+### Fixed
+
+- **Wagtail 8.x `register` import path** (`widgets.py`)
+
+  `register` moved from `wagtail.telepath` to `wagtail.admin.telepath` in Wagtail 8.
+  The import now prefers the new module and falls back for Wagtail < 8.
 
 ---
 

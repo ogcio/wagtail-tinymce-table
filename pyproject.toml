@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wagtail-tinymce-table"
-version = "0.3.0"
+version = "0.4.0"
 description = "TinyMCE-powered StreamField blocks for Wagtail, including a table block with Excel paste support."
 readme = "README.md"
 license = { text = "MIT" }
@@ -51,7 +51,7 @@ Repository = "https://github.com/ogcio/wagtail-tinymce-table"
 # ---------------------------------------------------------------------------
 [tool.poetry]
 name = "wagtail-tinymce-table"
-version = "0.3.0"
+version = "0.4.0"
 description = "TinyMCE-powered StreamField blocks for Wagtail, including a table block with Excel paste support."
 authors = []
 
