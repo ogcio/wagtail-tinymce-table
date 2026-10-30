@@ -30,6 +30,8 @@ _LITERAL_BR_RE = re.compile(r"<br\s*/?>", re.IGNORECASE)
 # Block-level tags that warrant a line break in extracted PO text.  Inline
 # siblings (e.g. plain text next to <a>) must not — see _cell_translatable_text.
 _BLOCK_TAGS = frozenset({"p", "div", "li", "h1", "h2", "h3", "h4", "h5", "h6"})
+# One ``find`` for the common inline-only cell (text + ``<a>`` with no ``<br>``/blocks).
+_CELL_STRUCTURE_TAGS = ("br", "table", *_BLOCK_TAGS)
 
 
 def _normalize_br_text(text: str) -> str:
@@ -49,79 +51,99 @@ def _normalize_br_text(text: str) -> str:
 def _cell_translatable_text(cell) -> str:
     """Cell plain text for extract/restore, with ``\\n`` only for ``<br>`` and blocks.
 
-    ``get_text(separator='\\n')`` also inserts newlines between inline siblings
-    (text and ``<a>``), which mis-classifies cells on restore and drops links.
+    Plain ``get_text()`` is enough when the cell has no ``<br>``, block wrapper,
+    or nested table. Only ``get_text(separator='\\n')`` wrongly breaks between
+    inline siblings (text and ``<a>``).
     """
+    if cell.find(_CELL_STRUCTURE_TAGS) is None:
+        return _normalize_br_text(cell.get_text()).strip()
+
     chunks: list[str] = []
-
-    def walk(node) -> None:
-        for child in getattr(node, "children", []):
-            if isinstance(child, NavigableString):
-                chunks.append(str(child))
-            elif child.name == "br":
+    pending = list(cell.children)
+    while pending:
+        child = pending.pop(0)
+        if isinstance(child, NavigableString):
+            chunks.append(str(child))
+        elif child.name == "br":
+            chunks.append("\n")
+        elif child.name == "table":
+            continue
+        elif child.name in _BLOCK_TAGS:
+            if chunks and not chunks[-1].endswith("\n"):
                 chunks.append("\n")
-            elif child.name in _BLOCK_TAGS:
-                if chunks and not chunks[-1].endswith("\n"):
-                    chunks.append("\n")
-                walk(child)
-                if chunks and not chunks[-1].endswith("\n"):
-                    chunks.append("\n")
-            elif child.name == "table":
-                continue
-            else:
-                walk(child)
-
-    walk(cell)
+            pending[0:0] = list(child.children)
+            if chunks and not chunks[-1].endswith("\n"):
+                chunks.append("\n")
+        else:
+            pending[0:0] = list(child.children)
     return _normalize_br_text("".join(chunks)).strip()
+
+
+def _translated_link_span(words: list[str], cursor: int, old: str) -> tuple[int, int]:
+    """Word range in *words* for one existing link, searched in order.
+
+    The PO string is one sentence, so the link boundaries are not marked.
+    Reuse the English label when it is still there. Otherwise score a few
+    nearby words ("HSE" → "FSS", "An Bord Pleanála" → "Bord Pleanála").
+    """
+    old_words = old.split()
+    if not old_words:
+        return cursor, cursor
+
+    word_count = len(words)
+    old_len = len(old_words)
+    limit = min(word_count, cursor + old_len + 3)
+    for idx in range(cursor, max(cursor, limit - old_len + 1)):
+        if words[idx: idx + old_len] == old_words:
+            return idx, idx + old_len
+
+    old_lower = old.lower()
+    lo, hi = (1, 1) if old_len == 1 else (max(1, old_len - 1), old_len + 1)
+    best_rank = None
+    best = (cursor, min(cursor + 1, word_count))
+    for idx in range(cursor, limit):
+        for span in range(lo, hi + 1):
+            end = idx + span
+            if end > word_count:
+                break
+            phrase = " ".join(words[idx:end]).lower()
+            score = difflib.SequenceMatcher(None, old_lower, phrase).ratio()
+            rank = (score, -abs(span - old_len))
+            if best_rank is None or rank > best_rank:
+                best_rank = rank
+                best = (idx, end)
+                if score >= 1.0:
+                    return best
+    return best
 
 
 def _replace_text_keeping_anchors(cell_tag, translated_text) -> bool:
     """Keep every ``<a href>``. Do not rebuild the cell as ``<br>`` text.
 
-    Returns False when there is no href, so ``_replace_cell_text_plain`` runs.
+    Cells with no link return False and still use ``_replace_cell_text_plain``.
     """
     anchors = [anchor for anchor in cell_tag.find_all("a") if anchor.has_attr("href")]
     if not anchors:
         return False
 
     normalized = _normalize_br_text(translated_text)
+    # A link is not a line break. Only a real <br> keeps newlines.
     if cell_tag.find("br") is None:
         normalized = " ".join(normalized.split())
 
-    # Visible words are the link itself. Wrappers such as <p> stay in place.
+    # The cell's only words are the link. Put the translation in the <a>
+    # and leave wrappers such as <p> in place.
     if len(anchors) == 1 and anchors[0].get_text().split() == cell_tag.get_text().split():
         anchors[0].clear()
         anchors[0].append(NavigableString(normalized))
         return True
 
+    # Same span lookup for every link, then the words between spans stay as text.
     words = normalized.split()
-    cursor = 0
     spans = []
+    cursor = 0
     for anchor in anchors:
-        old = anchor.get_text().strip()
-        old_len = len(old.split()) or 1
-        rest = " ".join(words[cursor:])
-        found = rest.find(old) if old else -1
-        if found >= 0:
-            skipped = rest[:found]
-            start = cursor + (len(skipped.split()) if skipped.strip() else 0)
-            end = start + old_len
-        else:
-            # Label changed in the PO. Match a short window; one-word labels stay one word.
-            lo, hi = (1, 1) if old_len == 1 else (max(1, old_len - 1), old_len + 1)
-            limit = min(len(words), cursor + old_len + 3)
-            best = None
-            for start in range(cursor, limit):
-                for span in range(lo, hi + 1):
-                    if start + span > len(words):
-                        break
-                    phrase = " ".join(words[start : start + span])
-                    score = difflib.SequenceMatcher(None, old.lower(), phrase.lower()).ratio()
-                    rank = (score, -abs(span - old_len))
-                    if best is None or rank > best[0]:
-                        best = (rank, start, span)
-            start = best[1] if best else cursor
-            end = start + (best[2] if best else 1)
+        start, end = _translated_link_span(words, cursor, anchor.get_text().strip())
         spans.append((start, end))
         cursor = end
 
@@ -191,7 +213,11 @@ def _replace_cell_text_plain(cell_tag, translated_text):
 
 
 def _replace_cell_text(cell_tag, translated_text):
-    """Apply *translated_text*. Cells with ``<a href>`` never take the plain path."""
+    """Apply *translated_text*.
+
+    Link cells keep their ``<a href>``. Every other cell uses the original
+    plain-text restore, including cells whose only line breaks are real ``<br>``.
+    """
     if _replace_text_keeping_anchors(cell_tag, translated_text):
         return
 
