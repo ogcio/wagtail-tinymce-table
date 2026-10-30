@@ -718,3 +718,114 @@ class TestLiteralBrTextNormalization:
         td = soup.find("td")
         assert len(td.find_all("br")) == 2
         assert "&lt;br" not in result
+
+# ---------------------------------------------------------------------------
+# Link preservation through translation round-trip
+# ---------------------------------------------------------------------------
+
+
+class TestLinkPreservationInCells:
+    """Regression for table cells containing <a href> (36623)."""
+
+    def _round_trip(self, localize_block, html, translations):
+        extracted = localize_block.get_translatable_segments(html)
+        translated = [
+            MockSegment("", translations.get(s.string.data, s.string.data), s.order)
+            for s in extracted
+        ]
+        return localize_block.restore_translated_segments(html, translated)
+
+    def test_inline_link_extraction_no_spurious_newlines(self, localize_block):
+        html = (
+            "<table><tbody><tr>"
+            '<td>Visit <a href="https://www.hse.ie">HSE</a> for more information</td>'
+            "</tr></tbody></table>"
+        )
+        segs = localize_block.get_translatable_segments(html)
+        assert len(segs) == 1
+        assert segs[0].string.data == "Visit HSE for more information"
+        assert "\n" not in segs[0].string.data
+
+    def test_clean_cell_link_text_translated_href_preserved(self, localize_block):
+        html = (
+            "<table><tbody><tr>"
+            '<td><a href="https://www.hse.ie/">HSE</a></td>'
+            "</tr></tbody></table>"
+        )
+        result = self._round_trip(localize_block, html, {"HSE": "FSS"})
+        soup = BeautifulSoup(result, "html.parser")
+        a = soup.find("a", href="https://www.hse.ie/")
+        assert a is not None
+        assert a.get_text() == "FSS"
+
+    def test_p_wrapped_link_compound_cell(self, localize_block):
+        html = (
+            "<table><tbody><tr>"
+            '<td><p><a href="https://www.pleanala.ie/">'
+            "<span>An Bord</span> Pleanála</a></p><p>&nbsp;</p></td>"
+            "</tr></tbody></table>"
+        )
+        result = self._round_trip(
+            localize_block, html, {"An Bord Pleanála": "Bord Pleanála GA"}
+        )
+        soup = BeautifulSoup(result, "html.parser")
+        a = soup.find("a", href="https://www.pleanala.ie/")
+        assert a is not None
+        assert a.get_text() == "Bord Pleanála GA"
+
+    def test_inline_link_mixed_text_no_br(self, localize_block):
+        html = (
+            "<table><tbody><tr>"
+            '<td>Visit <a href="https://www.hse.ie">HSE</a> for more information</td>'
+            "</tr></tbody></table>"
+        )
+        irish = "Tabhair cuairt ar FSS le haghaidh tuilleadh eolais"
+        result = self._round_trip(
+            localize_block, html, {"Visit HSE for more information": irish}
+        )
+        soup = BeautifulSoup(result, "html.parser")
+        a = soup.find("a", href="https://www.hse.ie")
+        assert a is not None
+        assert a.get_text() == "FSS"
+        assert "Tabhair cuairt ar" in soup.find("td").get_text()
+        assert "le haghaidh tuilleadh eolais" in soup.find("td").get_text()
+        assert "<br" not in result.lower()
+
+    def test_multi_link_cell_all_labels_from_translation(self, localize_block):
+        html = (
+            "<table><tbody><tr>"
+            '<td>See <a href="https://www.hse.ie/">HSE</a> and '
+            '<a href="https://www.pleanala.ie/">An Bord Pleanála</a> for details</td>'
+            "</tr></tbody></table>"
+        )
+        en = "See HSE and An Bord Pleanála for details"
+        ga = "Féach ar FSS agus An Bord Pleanála le tuilleadh eolais"
+        result = self._round_trip(localize_block, html, {en: ga})
+        soup = BeautifulSoup(result, "html.parser")
+        first = soup.find("a", href="https://www.hse.ie/")
+        second = soup.find("a", href="https://www.pleanala.ie/")
+        td = soup.find("td")
+
+        assert first is not None and second is not None
+        assert first.get_text() == "FSS"
+        assert second.get_text() == "An Bord Pleanála"
+        assert "Féach ar" in td.get_text()
+        assert "le tuilleadh eolais" in td.get_text()
+        assert "<br" not in result.lower()
+
+    def test_multi_link_second_label_changes_in_po(self, localize_block):
+        html = (
+            "<table><tbody><tr>"
+            '<td>See <a href="https://www.hse.ie/">HSE</a> and '
+            '<a href="https://www.pleanala.ie/">An Bord Pleanála</a> for details</td>'
+            "</tr></tbody></table>"
+        )
+        en = "See HSE and An Bord Pleanála for details"
+        ga = "Féach ar FSS agus Bord Pleanála le tuilleadh eolais"
+        result = self._round_trip(localize_block, html, {en: ga})
+        soup = BeautifulSoup(result, "html.parser")
+        assert soup.find("a", href="https://www.hse.ie/").get_text() == "FSS"
+        assert (
+            soup.find("a", href="https://www.pleanala.ie/").get_text()
+            == "Bord Pleanála"
+        )

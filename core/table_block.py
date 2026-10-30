@@ -1,3 +1,4 @@
+import difflib
 import logging
 import re
 
@@ -26,6 +27,10 @@ _TFOOT_SETUP = "tablefooterrow"
 # the cell as a NavigableString.
 _LITERAL_BR_RE = re.compile(r"<br\s*/?>", re.IGNORECASE)
 
+# Block-level tags that warrant a line break in extracted PO text.  Inline
+# siblings (e.g. plain text next to <a>) must not — see _cell_translatable_text.
+_BLOCK_TAGS = frozenset({"p", "div", "li", "h1", "h2", "h3", "h4", "h5", "h6"})
+
 
 def _normalize_br_text(text: str) -> str:
     """Replace any literal ``<br>`` / ``<br/>`` strings with ``\\n``.
@@ -41,7 +46,109 @@ def _normalize_br_text(text: str) -> str:
     return _LITERAL_BR_RE.sub("\n", text)
 
 
-def _replace_cell_text(cell_tag, translated_text):
+def _cell_translatable_text(cell) -> str:
+    """Cell plain text for extract/restore, with ``\\n`` only for ``<br>`` and blocks.
+
+    ``get_text(separator='\\n')`` also inserts newlines between inline siblings
+    (text and ``<a>``), which mis-classifies cells on restore and drops links.
+    """
+    chunks: list[str] = []
+
+    def walk(node) -> None:
+        for child in getattr(node, "children", []):
+            if isinstance(child, NavigableString):
+                chunks.append(str(child))
+            elif child.name == "br":
+                chunks.append("\n")
+            elif child.name in _BLOCK_TAGS:
+                if chunks and not chunks[-1].endswith("\n"):
+                    chunks.append("\n")
+                walk(child)
+                if chunks and not chunks[-1].endswith("\n"):
+                    chunks.append("\n")
+            elif child.name == "table":
+                continue
+            else:
+                walk(child)
+
+    walk(cell)
+    return _normalize_br_text("".join(chunks)).strip()
+
+
+def _replace_text_keeping_anchors(cell_tag, translated_text) -> bool:
+    """Keep every ``<a href>``. Do not rebuild the cell as ``<br>`` text.
+
+    Returns False when there is no href, so ``_replace_cell_text_plain`` runs.
+    """
+    anchors = [anchor for anchor in cell_tag.find_all("a") if anchor.has_attr("href")]
+    if not anchors:
+        return False
+
+    normalized = _normalize_br_text(translated_text)
+    if cell_tag.find("br") is None:
+        normalized = " ".join(normalized.split())
+
+    # Visible words are the link itself. Wrappers such as <p> stay in place.
+    if len(anchors) == 1 and anchors[0].get_text().split() == cell_tag.get_text().split():
+        anchors[0].clear()
+        anchors[0].append(NavigableString(normalized))
+        return True
+
+    words = normalized.split()
+    cursor = 0
+    spans = []
+    for anchor in anchors:
+        old = anchor.get_text().strip()
+        old_len = len(old.split()) or 1
+        rest = " ".join(words[cursor:])
+        found = rest.find(old) if old else -1
+        if found >= 0:
+            skipped = rest[:found]
+            start = cursor + (len(skipped.split()) if skipped.strip() else 0)
+            end = start + old_len
+        else:
+            # Label changed in the PO. Match a short window; one-word labels stay one word.
+            lo, hi = (1, 1) if old_len == 1 else (max(1, old_len - 1), old_len + 1)
+            limit = min(len(words), cursor + old_len + 3)
+            best = None
+            for start in range(cursor, limit):
+                for span in range(lo, hi + 1):
+                    if start + span > len(words):
+                        break
+                    phrase = " ".join(words[start : start + span])
+                    score = difflib.SequenceMatcher(None, old.lower(), phrase.lower()).ratio()
+                    rank = (score, -abs(span - old_len))
+                    if best is None or rank > best[0]:
+                        best = (rank, start, span)
+            start = best[1] if best else cursor
+            end = start + (best[2] if best else 1)
+        spans.append((start, end))
+        cursor = end
+
+    runs = [" ".join(words[: spans[0][0]])]
+    for index, (start, end) in enumerate(spans):
+        anchors[index].clear()
+        anchors[index].append(NavigableString(" ".join(words[start:end])))
+        nxt = spans[index + 1][0] if index + 1 < len(spans) else len(words)
+        runs.append(" ".join(words[end:nxt]))
+
+    nodes = [
+        node
+        for node in cell_tag.descendants
+        if isinstance(node, NavigableString) and node.find_parent("a") is None
+    ]
+    if len(nodes) == len(runs):
+        for node, text in zip(nodes, runs):
+            orig = str(node)
+            if text and orig[:1].isspace() and not text[:1].isspace():
+                text = " " + text
+            if text and orig[-1:].isspace() and not text[-1:].isspace():
+                text += " "
+            node.replace_with(NavigableString(text))
+    return True
+
+
+def _replace_cell_text_plain(cell_tag, translated_text):
     """Replace the visible text of a BeautifulSoup cell tag with *translated_text*.
 
     Three cases are distinguished after normalising literal ``<br>`` strings
@@ -81,6 +188,14 @@ def _replace_cell_text(cell_tag, translated_text):
                     cell_tag.append(BeautifulSoup("<br/>", "html.parser").br)
         else:
             cell_tag.append(NavigableString(translated_text))
+
+
+def _replace_cell_text(cell_tag, translated_text):
+    """Apply *translated_text*. Cells with ``<a href>`` never take the plain path."""
+    if _replace_text_keeping_anchors(cell_tag, translated_text):
+        return
+
+    _replace_cell_text_plain(cell_tag, translated_text)
 
 
 class TinyMCETableBlock(TinyMCEBlock):
@@ -166,7 +281,7 @@ class TinyMCETableBlock(TinyMCEBlock):
             # must be handled explicitly before the row loop.
             caption = table.find("caption")
             if caption is not None:
-                text = _normalize_br_text(caption.get_text(separator="\n")).strip()
+                text = _cell_translatable_text(caption)
                 if text and text not in duplicate_elements:
                     segments.append(StringSegmentValue("", text, order=col))
                     duplicate_elements.append(text)
@@ -177,7 +292,7 @@ class TinyMCETableBlock(TinyMCEBlock):
                 # Include both <td> (body/footer cells) and <th> (header cells).
                 cells = row.find_all(["td", "th"])
                 for elem in cells:
-                    text = _normalize_br_text(elem.get_text(separator="\n")).strip()
+                    text = _cell_translatable_text(elem)
                     # Skip empty cells and cells that contain nested tables.
                     # The truthiness guard (bool(text)) ensures the first empty
                     # cell is not mistakenly added as a segment, which would
@@ -210,7 +325,7 @@ class TinyMCETableBlock(TinyMCEBlock):
                 # Restore caption before processing rows, mirroring extraction order.
                 caption = table.find("caption")
                 if caption is not None:
-                    text = _normalize_br_text(caption.get_text(separator="\n")).strip()
+                    text = _cell_translatable_text(caption)
                     if text:
                         try:
                             translated = sorted_segment[cell].string.data
@@ -233,7 +348,7 @@ class TinyMCETableBlock(TinyMCEBlock):
                     # Mirror the same cell selector used in get_translatable_segments.
                     cells = row.find_all(["td", "th"])
                     for ele in cells:
-                        text = _normalize_br_text(ele.get_text(separator="\n")).strip()
+                        text = _cell_translatable_text(ele)
                         if not text or ele.find("table"):
                             continue
                         try:
