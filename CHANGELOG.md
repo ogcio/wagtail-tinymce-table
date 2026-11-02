@@ -4,6 +4,22 @@ All notable changes to `wagtail-tinymce-table` are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
+## [0.5.1] — 2026-11-02
+
+### Fixed
+
+- **Links in table cells preserved during wagtail-localize translation** (`core/table_block.py`)
+
+  Extraction used `get_text(separator="\n")` on every cell, which inserted line breaks between inline siblings (plain text and `<a>`). On restore, cells were rebuilt and **links were lost or replaced with `<br>`**.
+
+  - **`_cell_translatable_text()`** — Uses plain `get_text()` when the cell has no `<br>`, block wrapper, or nested table; `\n` is added only for `<br>` and block-level tags (`p`, `div`, `li`, headings). Used for cells and captions in `get_translatable_segments()` and `restore_translated_segments()`.
+  - **`_replace_text_keeping_anchors()`** — Keeps each `<a href>`; updates link text from the translated PO string via **`_translated_link_span()`** (exact word match, then `difflib` fallback for shortened or changed labels).
+  - **`_replace_cell_text()`** — Delegates to anchor-preserving restore when links exist; otherwise **`_replace_cell_text_plain()`** (former `_replace_cell_text` behaviour, including `<br>` reconstruction).
+
+### Added
+
+- **`TestLinkPreservationInCells`** (`tests/test_table_block.py`) — six integration tests: single-segment extraction for inline links (no spurious `\n`); `href` unchanged with translated anchor text; `<p>`-wrapped links; mixed text + link round-trip without `<br>`; multi-link cells with one or two label changes in the PO string.
+---
 
 ## [0.5.0] — 2026-10-13
 

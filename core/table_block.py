@@ -1,3 +1,4 @@
+import difflib
 import logging
 import re
 
@@ -26,6 +27,12 @@ _TFOOT_SETUP = "tablefooterrow"
 # the cell as a NavigableString.
 _LITERAL_BR_RE = re.compile(r"<br\s*/?>", re.IGNORECASE)
 
+# Block-level tags that warrant a line break in extracted PO text.  Inline
+# siblings (e.g. plain text next to <a>) must not — see _cell_translatable_text.
+_BLOCK_TAGS = frozenset({"p", "div", "li", "h1", "h2", "h3", "h4", "h5", "h6"})
+# One ``find`` for the common inline-only cell (text + ``<a>`` with no ``<br>``/blocks).
+_CELL_STRUCTURE_TAGS = ("br", "table", *_BLOCK_TAGS)
+
 
 def _normalize_br_text(text: str) -> str:
     """Replace any literal ``<br>`` / ``<br/>`` strings with ``\\n``.
@@ -41,7 +48,129 @@ def _normalize_br_text(text: str) -> str:
     return _LITERAL_BR_RE.sub("\n", text)
 
 
-def _replace_cell_text(cell_tag, translated_text):
+def _cell_translatable_text(cell) -> str:
+    """Cell plain text for extract/restore, with ``\\n`` only for ``<br>`` and blocks.
+
+    Plain ``get_text()`` is enough when the cell has no ``<br>``, block wrapper,
+    or nested table. Only ``get_text(separator='\\n')`` wrongly breaks between
+    inline siblings (text and ``<a>``).
+    """
+    if cell.find(_CELL_STRUCTURE_TAGS) is None:
+        return _normalize_br_text(cell.get_text()).strip()
+
+    chunks: list[str] = []
+    pending = list(cell.children)
+    while pending:
+        child = pending.pop(0)
+        if isinstance(child, NavigableString):
+            chunks.append(str(child))
+        elif child.name == "br":
+            chunks.append("\n")
+        elif child.name == "table":
+            continue
+        elif child.name in _BLOCK_TAGS:
+            if chunks and not chunks[-1].endswith("\n"):
+                chunks.append("\n")
+            pending[0:0] = list(child.children)
+            if chunks and not chunks[-1].endswith("\n"):
+                chunks.append("\n")
+        else:
+            pending[0:0] = list(child.children)
+    return _normalize_br_text("".join(chunks)).strip()
+
+
+def _translated_link_span(words: list[str], cursor: int, old: str) -> tuple[int, int]:
+    """Word range in *words* for one existing link, searched in order.
+
+    The PO string is one sentence, so the link boundaries are not marked.
+    Reuse the English label when it is still there. Otherwise score a few
+    nearby words ("HSE" → "FSS", "An Bord Pleanála" → "Bord Pleanála").
+    """
+    old_words = old.split()
+    if not old_words:
+        return cursor, cursor
+
+    word_count = len(words)
+    old_len = len(old_words)
+    limit = min(word_count, cursor + old_len + 3)
+    for idx in range(cursor, max(cursor, limit - old_len + 1)):
+        if words[idx: idx + old_len] == old_words:
+            return idx, idx + old_len
+
+    old_lower = old.lower()
+    lo, hi = (1, 1) if old_len == 1 else (max(1, old_len - 1), old_len + 1)
+    best_rank = None
+    best = (cursor, min(cursor + 1, word_count))
+    for idx in range(cursor, limit):
+        for span in range(lo, hi + 1):
+            end = idx + span
+            if end > word_count:
+                break
+            phrase = " ".join(words[idx:end]).lower()
+            score = difflib.SequenceMatcher(None, old_lower, phrase).ratio()
+            rank = (score, -abs(span - old_len))
+            if best_rank is None or rank > best_rank:
+                best_rank = rank
+                best = (idx, end)
+                if score >= 1.0:
+                    return best
+    return best
+
+
+def _replace_text_keeping_anchors(cell_tag, translated_text) -> bool:
+    """Keep every ``<a href>``. Do not rebuild the cell as ``<br>`` text.
+
+    Cells with no link return False and still use ``_replace_cell_text_plain``.
+    """
+    anchors = [anchor for anchor in cell_tag.find_all("a") if anchor.has_attr("href")]
+    if not anchors:
+        return False
+
+    normalized = _normalize_br_text(translated_text)
+    # A link is not a line break. Only a real <br> keeps newlines.
+    if cell_tag.find("br") is None:
+        normalized = " ".join(normalized.split())
+
+    # The cell's only words are the link. Put the translation in the <a>
+    # and leave wrappers such as <p> in place.
+    if len(anchors) == 1 and anchors[0].get_text().split() == cell_tag.get_text().split():
+        anchors[0].clear()
+        anchors[0].append(NavigableString(normalized))
+        return True
+
+    # Same span lookup for every link, then the words between spans stay as text.
+    words = normalized.split()
+    spans = []
+    cursor = 0
+    for anchor in anchors:
+        start, end = _translated_link_span(words, cursor, anchor.get_text().strip())
+        spans.append((start, end))
+        cursor = end
+
+    runs = [" ".join(words[: spans[0][0]])]
+    for index, (start, end) in enumerate(spans):
+        anchors[index].clear()
+        anchors[index].append(NavigableString(" ".join(words[start:end])))
+        nxt = spans[index + 1][0] if index + 1 < len(spans) else len(words)
+        runs.append(" ".join(words[end:nxt]))
+
+    nodes = [
+        node
+        for node in cell_tag.descendants
+        if isinstance(node, NavigableString) and node.find_parent("a") is None
+    ]
+    if len(nodes) == len(runs):
+        for node, text in zip(nodes, runs):
+            orig = str(node)
+            if text and orig[:1].isspace() and not text[:1].isspace():
+                text = " " + text
+            if text and orig[-1:].isspace() and not text[-1:].isspace():
+                text += " "
+            node.replace_with(NavigableString(text))
+    return True
+
+
+def _replace_cell_text_plain(cell_tag, translated_text):
     """Replace the visible text of a BeautifulSoup cell tag with *translated_text*.
 
     Three cases are distinguished after normalising literal ``<br>`` strings
@@ -81,6 +210,18 @@ def _replace_cell_text(cell_tag, translated_text):
                     cell_tag.append(BeautifulSoup("<br/>", "html.parser").br)
         else:
             cell_tag.append(NavigableString(translated_text))
+
+
+def _replace_cell_text(cell_tag, translated_text):
+    """Apply *translated_text*.
+
+    Link cells keep their ``<a href>``. Every other cell uses the original
+    plain-text restore, including cells whose only line breaks are real ``<br>``.
+    """
+    if _replace_text_keeping_anchors(cell_tag, translated_text):
+        return
+
+    _replace_cell_text_plain(cell_tag, translated_text)
 
 
 class TinyMCETableBlock(TinyMCEBlock):
@@ -166,7 +307,7 @@ class TinyMCETableBlock(TinyMCEBlock):
             # must be handled explicitly before the row loop.
             caption = table.find("caption")
             if caption is not None:
-                text = _normalize_br_text(caption.get_text(separator="\n")).strip()
+                text = _cell_translatable_text(caption)
                 if text and text not in duplicate_elements:
                     segments.append(StringSegmentValue("", text, order=col))
                     duplicate_elements.append(text)
@@ -177,7 +318,7 @@ class TinyMCETableBlock(TinyMCEBlock):
                 # Include both <td> (body/footer cells) and <th> (header cells).
                 cells = row.find_all(["td", "th"])
                 for elem in cells:
-                    text = _normalize_br_text(elem.get_text(separator="\n")).strip()
+                    text = _cell_translatable_text(elem)
                     # Skip empty cells and cells that contain nested tables.
                     # The truthiness guard (bool(text)) ensures the first empty
                     # cell is not mistakenly added as a segment, which would
@@ -210,7 +351,7 @@ class TinyMCETableBlock(TinyMCEBlock):
                 # Restore caption before processing rows, mirroring extraction order.
                 caption = table.find("caption")
                 if caption is not None:
-                    text = _normalize_br_text(caption.get_text(separator="\n")).strip()
+                    text = _cell_translatable_text(caption)
                     if text:
                         try:
                             translated = sorted_segment[cell].string.data
@@ -233,7 +374,7 @@ class TinyMCETableBlock(TinyMCEBlock):
                     # Mirror the same cell selector used in get_translatable_segments.
                     cells = row.find_all(["td", "th"])
                     for ele in cells:
-                        text = _normalize_br_text(ele.get_text(separator="\n")).strip()
+                        text = _cell_translatable_text(ele)
                         if not text or ele.find("table"):
                             continue
                         try:
